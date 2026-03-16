@@ -25,12 +25,12 @@ param tags = {
   costCenter: 'research-it'
 }
 
+// Spoke VNet address space
 param vnetAddressPrefix = '10.0.0.0/16'
 
-param vmSize = 'Standard_D4s_v5'
+// Hub VNet address space (must not overlap with spoke)
+param hubVnetAddressPrefix = '10.1.0.0/16'
 
 param dsVmSize = 'Standard_D8s_v5'
-
-param vmCount = 2
 
 param dsVmCount = 1

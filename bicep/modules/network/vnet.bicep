@@ -12,9 +12,6 @@ param tags object
 @description('Address prefix for the virtual network.')
 param vnetAddressPrefix string = '10.0.0.0/16'
 
-@description('Address prefix for the researchers subnet.')
-param researchersSubnetPrefix string = '10.0.1.0/24'
-
 @description('Address prefix for the compute subnet.')
 param computeSubnetPrefix string = '10.0.2.0/24'
 
@@ -24,59 +21,10 @@ param privateEndpointSubnetPrefix string = '10.0.3.0/24'
 @description('Address prefix for the data integration subnet.')
 param dataIntegrationSubnetPrefix string = '10.0.4.0/24'
 
-// ── NSGs ──────────────────────────────────────────────────────────────────────
+@description('Address prefix of the hub Research subnet. Used in the compute NSG to allow inbound SSH only from researchers.')
+param hubResearchSubnetPrefix string = '10.1.2.0/24'
 
-resource nsgResearchers 'Microsoft.Network/networkSecurityGroups@2023-05-01' = {
-  name: '${environmentName}-researchers-nsg'
-  location: location
-  tags: tags
-  properties: {
-    securityRules: [
-      {
-        name: 'Allow-RDP-Inbound'
-        properties: {
-          priority: 100
-          protocol: 'Tcp'
-          access: 'Allow'
-          direction: 'Inbound'
-          sourceAddressPrefix: 'VirtualNetwork'
-          sourcePortRange: '*'
-          destinationAddressPrefix: '*'
-          destinationPortRange: '3389'
-          description: 'Allow RDP from within the VNet (AVD reverse connection — kept for break-glass).'
-        }
-      }
-      {
-        name: 'Deny-Internet-Inbound'
-        properties: {
-          priority: 4000
-          protocol: '*'
-          access: 'Deny'
-          direction: 'Inbound'
-          sourceAddressPrefix: 'Internet'
-          sourcePortRange: '*'
-          destinationAddressPrefix: '*'
-          destinationPortRange: '*'
-          description: 'Block all inbound traffic from the internet.'
-        }
-      }
-      {
-        name: 'Deny-Internet-Outbound'
-        properties: {
-          priority: 4000
-          protocol: '*'
-          access: 'Deny'
-          direction: 'Outbound'
-          sourceAddressPrefix: '*'
-          sourcePortRange: '*'
-          destinationAddressPrefix: 'Internet'
-          destinationPortRange: '*'
-          description: 'Prevent researchers from reaching the internet directly.'
-        }
-      }
-    ]
-  }
-}
+// ── NSGs ──────────────────────────────────────────────────────────────────────
 
 resource nsgCompute 'Microsoft.Network/networkSecurityGroups@2023-05-01' = {
   name: '${environmentName}-compute-nsg'
@@ -85,17 +33,17 @@ resource nsgCompute 'Microsoft.Network/networkSecurityGroups@2023-05-01' = {
   properties: {
     securityRules: [
       {
-        name: 'Allow-SSH-From-Researchers'
+        name: 'Allow-SSH-From-Hub-Research'
         properties: {
           priority: 100
           protocol: 'Tcp'
           access: 'Allow'
           direction: 'Inbound'
-          sourceAddressPrefix: researchersSubnetPrefix
+          sourceAddressPrefix: hubResearchSubnetPrefix
           sourcePortRange: '*'
           destinationAddressPrefix: '*'
           destinationPortRange: '22'
-          description: 'Allow SSH from the researchers subnet only.'
+          description: 'Allow SSH from the hub Research subnet (Bastion-connected jumpbox).'
         }
       }
       {
@@ -204,15 +152,6 @@ resource vnet 'Microsoft.Network/virtualNetworks@2023-05-01' = {
     }
     subnets: [
       {
-        name: 'ResearchersSubnet'
-        properties: {
-          addressPrefix: researchersSubnetPrefix
-          networkSecurityGroup: { id: nsgResearchers.id }
-          privateEndpointNetworkPolicies: 'Disabled'
-          privateLinkServiceNetworkPolicies: 'Enabled'
-        }
-      }
-      {
         name: 'ComputeSubnet'
         properties: {
           addressPrefix: computeSubnetPrefix
@@ -285,17 +224,17 @@ output vnetId string = vnet.id
 @description('The name of the virtual network.')
 output vnetName string = vnet.name
 
-@description('The resource ID of the researchers subnet.')
-output researchersSubnetId string = vnet.properties.subnets[0].id
-
 @description('The resource ID of the compute subnet.')
-output computeSubnetId string = vnet.properties.subnets[1].id
+output computeSubnetId string = vnet.properties.subnets[0].id
 
 @description('The resource ID of the private endpoint subnet.')
-output privateEndpointSubnetId string = vnet.properties.subnets[2].id
+output privateEndpointSubnetId string = vnet.properties.subnets[1].id
 
 @description('The resource ID of the data integration subnet.')
-output dataIntegrationSubnetId string = vnet.properties.subnets[3].id
+output dataIntegrationSubnetId string = vnet.properties.subnets[2].id
 
 @description('The resource IDs of the private DNS zones.')
 output privateDnsZoneIds array = [for (zone, i) in privateDnsZones: dnsZones[i].id]
+
+@description('The names of the private DNS zones (used to create additional VNet links).')
+output privateDnsZoneNames array = privateDnsZones

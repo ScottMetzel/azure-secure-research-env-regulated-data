@@ -19,12 +19,6 @@ param vnetId string
 @description('Resource ID of the Log Analytics workspace for diagnostics.')
 param logAnalyticsWorkspaceId string
 
-@description('Resource ID of the ingestion storage account.')
-param ingestionStorageAccountId string
-
-@description('Name of the ingestion storage account.')
-param ingestionStorageAccountName string
-
 @description('Resource ID of the secure storage account.')
 param secureStorageAccountId string
 
@@ -118,20 +112,6 @@ resource adfDnsZoneGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroup
 }
 
 // ── Role Assignments ──────────────────────────────────────────────────────────
-
-resource ingestionStorageBlobContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(ingestionStorageAccountId, dataFactory.id, storageBlobDataContributorRoleId)
-  scope: ingestionStorageAccount
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', storageBlobDataContributorRoleId)
-    principalId: dataFactory.identity.principalId
-    principalType: 'ServicePrincipal'
-  }
-}
-
-resource ingestionStorageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' existing = {
-  name: ingestionStorageAccountName
-}
 
 resource secureStorageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' existing = {
   name: secureStorageAccountName
