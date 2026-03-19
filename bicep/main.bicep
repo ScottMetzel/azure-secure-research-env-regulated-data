@@ -3,17 +3,16 @@ targetScope = 'subscription'
 // ── Parameters ────────────────────────────────────────────────────────────────
 
 @description('Azure region for all resources.')
-param location string = 'eastus'
+param location string = 'westus2'
 
 @description('Short environment name used as a prefix for all resource names.')
 @minLength(1)
 @maxLength(20)
-param environmentName string = 'sre'
+param environmentName string = 'production'
 
 @description('Tags applied to every resource.')
 param tags object = {
-  environment: 'secure-research'
-  managedBy: 'bicep'
+  workloadName: 'SILO'
 }
 
 @description('Local administrator username for VMs.')
@@ -22,6 +21,21 @@ param adminUsername string
 @description('Local administrator password for VMs.')
 @secure()
 param adminPassword string
+
+@description('Subscription ID where the research environment will be deployed. Used for cross-subscription resource deployments and role assignments.')
+@minLength(36)
+@maxLength(36)
+param researcherSubscriptionID string
+
+@description('Subscription ID where the hub VNet (with Firewall) will be deployed. Used for cross-subscription resource deployments and role assignments.')
+@minLength(36)
+@maxLength(36)
+param hubSubscriptionID string
+
+@description('Subscription ID where the Bastion and virtual desktop environment will be deployed. Used for cross-subscription resource deployments and role assignments.')
+@minLength(36)
+@maxLength(36)
+param virtualDesktopSubscriptionID string
 
 @description('Email address to receive data-egress approval requests.')
 param approverEmail string
@@ -37,7 +51,7 @@ param dsVmSize string = 'Standard_D8s_v5'
 
 @description('Number of Data Science VMs.')
 @minValue(1)
-@maxValue(20)
+@maxValue(1)
 param dsVmCount int = 1
 
 // ── Resource Groups ───────────────────────────────────────────────────────────

@@ -4,14 +4,16 @@
 using './main.bicep'
 
 // ── Required parameters ───────────────────────────────────────────────────────
-
 param adminUsername = 'sreAdmin'
 
 // Replace with a strong password or reference an Azure Key Vault secret using
 // the syntax: readEnvironmentVariable('ADMIN_PASSWORD') (bicep param files support this)
 param adminPassword = 'REPLACE_WITH_SECURE_PASSWORD'
-
 param approverEmail = 'data-approver@example.com'
+
+param researcherSubscriptionID = '00000000-0000-0000-0000-000000000000'
+param hubSubscriptionID = '00000000-0000-0000-0000-000000000000'
+param virtualDesktopSubscriptionID = '00000000-0000-0000-0000-000000000000'
 
 // ── Optional overrides ────────────────────────────────────────────────────────
 
