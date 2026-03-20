@@ -71,9 +71,9 @@ module researcherNetworking '../network/networking_researcher.bicep' = {
 
 // ── Key Vault (compute-rg, private endpoint in PrivateEndpointSubnet) ─────────
 
-module keyvault 'modules/keyvault/keyvault.bicep' = {
+module keyvault '../keyvault/keyvault.bicep' = {
   name: 'keyvault'
-  scope: computeRg
+  scope: researcherRG
   params: {
     location: location
     environmentName: environmentName
@@ -88,9 +88,9 @@ module keyvault 'modules/keyvault/keyvault.bicep' = {
 // Publicly-accessible storage for external data uploads.
 // Requirement: Public storage account in its own resource group.
 
-module storageIngestion 'modules/storage/storageIngestion.bicep' = {
+module storageIngestion '../storage/storageIngestion.bicep' = {
   name: 'storageIngestion'
-  scope: ingestRg
+  scope: dataOwnerApproverRG
   params: {
     location: location
     environmentName: environmentName
@@ -101,9 +101,9 @@ module storageIngestion 'modules/storage/storageIngestion.bicep' = {
 
 // ── Secure Storage (compute-rg, private endpoint in PrivateEndpointSubnet) ────
 
-module storageSecure 'modules/storage/storageSecure.bicep' = {
+module storageSecure '../storage/storageSecure.bicep' = {
   name: 'storageSecure'
-  scope: computeRg
+  scope: researcherRG
   params: {
     location: location
     environmentName: environmentName
@@ -117,9 +117,9 @@ module storageSecure 'modules/storage/storageSecure.bicep' = {
 
 // ── Data Factory (compute-rg, private endpoint in DataIntegrationSubnet) ──────
 
-module datafactory 'modules/datafactory/datafactory.bicep' = {
+module datafactory '../datafactory/datafactory.bicep' = {
   name: 'datafactory'
-  scope: computeRg
+  scope: researcherRG
   params: {
     location: location
     environmentName: environmentName
@@ -137,9 +137,9 @@ module datafactory 'modules/datafactory/datafactory.bicep' = {
 // The ingestion storage account lives in ingest-rg while ADF lives in compute-rg.
 // The role assignment must be deployed in ingest-rg to avoid a cross-RG scope error.
 
-module adfIngestionRoleAssignment 'modules/roleAssignment/roleAssignment.bicep' = {
+module adfIngestionRoleAssignment '../roleAssignment/roleAssignment.bicep' = {
   name: 'adfIngestionRoleAssignment'
-  scope: ingestRg
+  scope: dataOwnerApproverRG
   params: {
     principalId: datafactory.outputs.dataFactoryPrincipalId
     roleDefinitionId: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe' // Storage Blob Data Contributor
@@ -149,9 +149,9 @@ module adfIngestionRoleAssignment 'modules/roleAssignment/roleAssignment.bicep' 
 
 // ── Data Science VMs (compute-rg, NICs in ComputeSubnet) ─────────────────────
 
-module datasciencevm 'modules/compute/datasciencevm.bicep' = {
+module datasciencevm '../compute/datasciencevm.bicep' = {
   name: 'datasciencevm'
-  scope: computeRg
+  scope: researcherRG
   params: {
     location: location
     environmentName: environmentName
@@ -168,9 +168,9 @@ module datasciencevm 'modules/compute/datasciencevm.bicep' = {
 // ── Egress Approval Logic App (logicapp-rg) ───────────────────────────────────
 // Requirement: Logic App in its own resource group.
 
-module egressApproval 'modules/logicapp/egressApproval.bicep' = {
+module egressApproval '../logicapp/egressApproval.bicep' = {
   name: 'egressApproval'
-  scope: logicAppRg
+  scope: dataOwnerApproverRG
   params: {
     location: location
     environmentName: environmentName
