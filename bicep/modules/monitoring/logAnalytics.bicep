@@ -17,7 +17,7 @@ param retentionInDays int = 90
 // ── Resources ────────────────────────────────────────────────────────────────
 
 resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
-  name: '${environmentName}-law'
+  name: '${environmentName}-LAW-SOC-01'
   location: location
   tags: tags
   properties: {

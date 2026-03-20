@@ -1,10 +1,5 @@
 targetScope = 'subscription'
 
-@description('Subscription ID where the Bastion and virtual desktop environment will be deployed. Used for cross-subscription resource deployments and role assignments.')
-@minLength(36)
-@maxLength(36)
-param virtualDesktopSubscriptionID string
-
 @description('Azure region for all resources.')
 param location string = 'westus2'
 
@@ -13,11 +8,25 @@ param location string = 'westus2'
 @maxLength(20)
 param environmentName string = 'Prod'
 
-param spokeVNETAddressPrefix string = ''
-param bastionSubnetPrefix string = ''
-param rdServerSubnetPrefix string = ''
-param avdSubnetPrefix string = ''
-param storageSubnetPrefix string = ''
+@description('Address prefix for the virtual network.')
+param vnetAddressPrefix string = '10.100.40.0/21'
+
+@description('Address prefix for the Azure Bastion subnet.')
+param bastionSubnetPrefix string = '10.100.40.0/26'
+
+param webSubnetPrefix string = '10.100.40.64/27'
+param appSubnetPrefix string = '10.100.40.96/27'
+param dbSubnetPrefix string = '10.100.40.128/27'
+@description('Address prefix for the storage subnet, used with Azure Storage Accounts and FSLogix.')
+param storageSubnetPrefix string = '10.100.40.160/27'
+
+param webVNETIntegrationSubnetPrefix string = '10.100.40.192/27'
+
+@description('Address prefix for the Remote Desktop Server subnet.')
+param rdServerSubnetPrefix string = '10.100.41.0/24'
+
+@description('Address prefix for the first Azure Virtual Desktop subnet.')
+param avdSubnetPrefix string = '10.100.42.0/24'
 
 @description('Local administrator username for VMs.')
 param adminUsername string
@@ -25,6 +34,8 @@ param adminUsername string
 @description('Local administrator password for VMs.')
 @secure()
 param adminPassword string
+
+param logAnalyticsWorkspaceResourceId string
 
 @description('Tags applied to every resource.')
 param tags object = {
@@ -56,17 +67,68 @@ resource rdServerVMRG 'Microsoft.Resources/resourceGroups@2023-07-01' = {
 }
 
 // ── Resources ───────────────────────────────────────────────────────────
-module network '../network/virtualDesktopNetworking.bicep' = {
+module networkingVirtualDesktop '../network/networking_virtualDesktop.bicep' = {
   name: 'virtualDesktopNetworking'
   scope: spokeVNETRG
   params: {
     location: location
     environmentName: environmentName
     tags: tags
-    vnetAddressPrefix: spokeVNETAddressPrefix
+    vnetAddressPrefix: vnetAddressPrefix
     bastionSubnetPrefix: bastionSubnetPrefix
+    webSubnetPrefix: webSubnetPrefix
+    appSubnetPrefix: appSubnetPrefix
+    dbSubnetPrefix: dbSubnetPrefix
+    storageSubnetPrefix: storageSubnetPrefix
+    webVNETIntegrationSubnetPrefix: webVNETIntegrationSubnetPrefix
     rdServerSubnetPrefix: rdServerSubnetPrefix
     avdSubnetPrefix: avdSubnetPrefix
-    storageSubnetPrefix: storageSubnetPrefix
   }
 }
+
+// ── Azure Bastion (bastion-rg; uses AzureBastionSubnet from hub VNet) ─────────
+// Requirement: Bastion in a separate resource group from the hub VNet and VM.
+
+module bastion '../bastion/bastion.bicep' = {
+  name: 'bastion'
+  scope: bastionRG
+  params: {
+    location: location
+    environmentName: environmentName
+    tags: tags
+    bastionSubnetId: networkingVirtualDesktop.outputs.AzureBastionSubnetId
+
+    logAnalyticsWorkspaceId: logAnalyticsWorkspaceResourceId
+  }
+}
+
+// ── Research VM (researchvm-rg; NIC in ResearchSubnet of hub VNet) ────────────
+// Gen2 D4ds_v5 Windows Server 2025 Azure Edition VM — accessed via Azure Bastion.
+// Requirement: VM in a separate resource group from both the hub VNet and Bastion.
+
+module researchVm '../compute/researchvm.bicep' = {
+  name: 'researchVm'
+  scope: rdServerVMRG
+  params: {
+    location: location
+    environmentName: environmentName
+    tags: tags
+    subnetId: hubVnet.outputs.researchSubnetId
+    logAnalyticsWorkspaceId: monitoring.outputs.workspaceResourceId
+    adminUsername: adminUsername
+    adminPassword: adminPassword
+  }
+}
+
+// ── Outputs ───────────────────────────────────────────────────────────
+@description('The name of the Remote Desktop VNET Resource Group.')
+output rdVnetResourceGroupName string = spokeVNETRG.name
+
+@description('Remote Desktop VNET ID.')
+output rdVnetId string = networkingVirtualDesktop.outputs.vnetId
+
+@description('Remote Desktop VNET Name.')
+output rdVnetName string = networkingVirtualDesktop.outputs.vnetName
+
+@description('Azure Bastion Resource ID.')
+output bastionResourceId string = bastion.outputs.bastionId

@@ -1,4 +1,4 @@
-@description('Azure region for all hub network resources.')
+@description('Azure region for all network resources.')
 param location string
 
 @description('Environment name used as a prefix for resource names.')
@@ -9,24 +9,32 @@ param environmentName string
 @description('Tags to apply to all resources.')
 param tags object
 
-@description('Address prefix for the hub virtual network.')
-param hubVnetAddressPrefix string = '10.1.0.0/16'
+@description('Address prefix for the virtual network.')
+param vnetAddressPrefix string = '10.100.40.0/21'
 
-@description('Address prefix for AzureFirewallSubnet (minimum /26).')
-param firewallSubnetPrefix string = '10.1.0.0/26'
+@description('Address prefix for the Azure Bastion subnet.')
+param bastionSubnetPrefix string = '10.100.40.0/26'
 
-@description('Address prefix for AzureBastionSubnet (minimum /26).')
-param bastionSubnetPrefix string = '10.1.1.0/26'
+param webSubnetPrefix string = '10.100.40.64/27'
+param appSubnetPrefix string = '10.100.40.96/27'
+param dbSubnetPrefix string = '10.100.40.128/27'
+@description('Address prefix for the storage subnet, used with Azure Storage Accounts and FSLogix.')
+param storageSubnetPrefix string = '10.100.40.160/27'
 
-@description('Address prefix for the researcher access (jumpbox) subnet.')
-param researchSubnetPrefix string = '10.1.2.0/24'
+param webVNETIntegrationSubnetPrefix string = '10.100.40.192/27'
 
-// ── NSG: AzureBastionSubnet ───────────────────────────────────────────────────
+@description('Address prefix for the Remote Desktop Server subnet.')
+param rdServerSubnetPrefix string = '10.100.41.0/24'
+
+@description('Address prefix for the first Azure Virtual Desktop subnet.')
+param avdSubnetPrefix string = '10.100.42.0/24'
+
+// ── NSGs ──────────────────────────────────────────────────────────────────────
 // Azure Bastion requires specific inbound/outbound rules.
 // See: https://learn.microsoft.com/azure/bastion/bastion-nsg
 
-resource nsgBastion 'Microsoft.Network/networkSecurityGroups@2023-05-01' = {
-  name: '${environmentName}-bastion-nsg'
+resource AzureBastionNSG 'Microsoft.Network/networkSecurityGroups@2023-05-01' = {
+  name: '${environmentName}-NSG-Bastion-01'
   location: location
   tags: tags
   properties: {
@@ -177,113 +185,102 @@ resource nsgBastion 'Microsoft.Network/networkSecurityGroups@2023-05-01' = {
   }
 }
 
-// ── NSG: ResearchSubnet ───────────────────────────────────────────────────────
-
-resource nsgResearch 'Microsoft.Network/networkSecurityGroups@2023-05-01' = {
-  name: '${environmentName}-research-nsg'
+resource RemoteDesktopNSG 'Microsoft.Network/networkSecurityGroups@2023-05-01' = {
+  name: '${environmentName}-NSG-RemoteDesktop-01'
   location: location
   tags: tags
   properties: {
-    securityRules: [
-      {
-        name: 'Allow-RDP-From-Bastion'
-        properties: {
-          priority: 100
-          protocol: 'Tcp'
-          access: 'Allow'
-          direction: 'Inbound'
-          sourceAddressPrefix: bastionSubnetPrefix
-          sourcePortRange: '*'
-          destinationAddressPrefix: '*'
-          destinationPortRange: '3389'
-          description: 'Allow RDP connections from Azure Bastion subnet only.'
-        }
-      }
-      {
-        name: 'Allow-SSH-From-Bastion'
-        properties: {
-          priority: 110
-          protocol: 'Tcp'
-          access: 'Allow'
-          direction: 'Inbound'
-          sourceAddressPrefix: bastionSubnetPrefix
-          sourcePortRange: '*'
-          destinationAddressPrefix: '*'
-          destinationPortRange: '22'
-          description: 'Allow SSH connections from Azure Bastion subnet only.'
-        }
-      }
-      {
-        name: 'Deny-Internet-Inbound'
-        properties: {
-          priority: 4000
-          protocol: '*'
-          access: 'Deny'
-          direction: 'Inbound'
-          sourceAddressPrefix: 'Internet'
-          sourcePortRange: '*'
-          destinationAddressPrefix: '*'
-          destinationPortRange: '*'
-          description: 'Block all inbound traffic from the internet.'
-        }
-      }
-      {
-        name: 'Deny-Internet-Outbound'
-        properties: {
-          priority: 4000
-          protocol: '*'
-          access: 'Deny'
-          direction: 'Outbound'
-          sourceAddressPrefix: '*'
-          sourcePortRange: '*'
-          destinationAddressPrefix: 'Internet'
-          destinationPortRange: '*'
-          description: 'Prevent research VMs from reaching the internet directly.'
-        }
-      }
-    ]
+    securityRules: []
   }
 }
 
-// ── Hub Virtual Network ───────────────────────────────────────────────────────
-// AzureFirewallSubnet and AzureBastionSubnet are reserved names required by Azure.
+// ── Virtual Network ───────────────────────────────────────────────────────────
 
-resource hubVnet 'Microsoft.Network/virtualNetworks@2023-05-01' = {
-  name: '${environmentName}-hub-vnet'
+resource virtualDesktopVNET 'Microsoft.Network/virtualNetworks@2023-05-01' = {
+  name: '${environmentName}-VNET-RemoteDesktop-01'
   location: location
   tags: tags
   properties: {
     addressSpace: {
-      addressPrefixes: [hubVnetAddressPrefix]
+      addressPrefixes: [vnetAddressPrefix]
     }
     subnets: [
       {
-        // Azure Firewall requires this exact subnet name and a /26 minimum prefix.
-        name: 'AzureFirewallSubnet'
-        properties: {
-          addressPrefix: firewallSubnetPrefix
-          // NSGs are not supported on AzureFirewallSubnet.
-          privateEndpointNetworkPolicies: 'Disabled'
-          privateLinkServiceNetworkPolicies: 'Enabled'
-        }
-      }
-      {
-        // Azure Bastion requires this exact subnet name and a /26 minimum prefix.
         name: 'AzureBastionSubnet'
         properties: {
           addressPrefix: bastionSubnetPrefix
-          networkSecurityGroup: { id: nsgBastion.id }
+          networkSecurityGroup: { id: AzureBastionNSG.id }
           privateEndpointNetworkPolicies: 'Disabled'
           privateLinkServiceNetworkPolicies: 'Enabled'
         }
       }
       {
-        name: 'ResearchSubnet'
+        name: 'Web01'
         properties: {
-          addressPrefix: researchSubnetPrefix
-          networkSecurityGroup: { id: nsgResearch.id }
+          addressPrefix: webSubnetPrefix
+          networkSecurityGroup: { id: RemoteDesktopNSG.id }
+          privateEndpointNetworkPolicies: 'Enabled'
+          privateLinkServiceNetworkPolicies: 'Enabled'
+          serviceEndpoints: []
+        }
+      }
+      {
+        name: 'App01'
+        properties: {
+          addressPrefix: appSubnetPrefix
+          networkSecurityGroup: { id: RemoteDesktopNSG.id }
+          privateEndpointNetworkPolicies: 'Enabled'
+          privateLinkServiceNetworkPolicies: 'Enabled'
+          serviceEndpoints: []
+        }
+      }
+      {
+        name: 'DB01'
+        properties: {
+          addressPrefix: dbSubnetPrefix
+          networkSecurityGroup: { id: RemoteDesktopNSG.id }
+          privateEndpointNetworkPolicies: 'Enabled'
+          privateLinkServiceNetworkPolicies: 'Enabled'
+          serviceEndpoints: []
+        }
+      }
+      {
+        name: 'Storage01'
+        properties: {
+          addressPrefix: storageSubnetPrefix
+          networkSecurityGroup: { id: RemoteDesktopNSG.id }
+          privateEndpointNetworkPolicies: 'Enabled'
+          privateLinkServiceNetworkPolicies: 'Enabled'
+          serviceEndpoints: []
+        }
+      }
+      {
+        name: 'WebVNETIntegration01'
+        properties: {
+          addressPrefix: webVNETIntegrationSubnetPrefix
+          networkSecurityGroup: { id: RemoteDesktopNSG.id }
           privateEndpointNetworkPolicies: 'Disabled'
           privateLinkServiceNetworkPolicies: 'Enabled'
+          serviceEndpoints: []
+        }
+      }
+      {
+        name: 'RDServer01'
+        properties: {
+          addressPrefix: rdServerSubnetPrefix
+          networkSecurityGroup: { id: RemoteDesktopNSG.id }
+          privateEndpointNetworkPolicies: 'Disabled'
+          privateLinkServiceNetworkPolicies: 'Enabled'
+        }
+      }
+      {
+        name: 'AVD01'
+        properties: {
+          addressPrefix: avdSubnetPrefix
+          networkSecurityGroup: { id: RemoteDesktopNSG.id }
+          privateEndpointNetworkPolicies: 'Disabled'
+          privateLinkServiceNetworkPolicies: 'Enabled'
+          serviceEndpoints: []
         }
       }
     ]
@@ -292,17 +289,32 @@ resource hubVnet 'Microsoft.Network/virtualNetworks@2023-05-01' = {
 
 // ── Outputs ───────────────────────────────────────────────────────────────────
 
-@description('The resource ID of the hub virtual network.')
-output hubVnetId string = hubVnet.id
+@description('The resource ID of the virtual network.')
+output vnetId string = virtualDesktopVNET.id
 
-@description('The name of the hub virtual network.')
-output hubVnetName string = hubVnet.name
+@description('The name of the virtual network.')
+output vnetName string = virtualDesktopVNET.name
 
-@description('The resource ID of AzureFirewallSubnet.')
-output firewallSubnetId string = hubVnet.properties.subnets[0].id
+@description('The resource ID of the Azure Bastion subnet.')
+output AzureBastionSubnetId string = virtualDesktopVNET.properties.subnets[0].id
 
-@description('The resource ID of AzureBastionSubnet.')
-output bastionSubnetId string = hubVnet.properties.subnets[1].id
+@description('The resource ID of the Web01 subnet.')
+output Web01SubnetId string = virtualDesktopVNET.properties.subnets[1].id
 
-@description('The resource ID of ResearchSubnet (for the jumpbox VM NIC).')
-output researchSubnetId string = hubVnet.properties.subnets[2].id
+@description('The resource ID of the App01 subnet.')
+output App01SubnetId string = virtualDesktopVNET.properties.subnets[2].id
+
+@description('The resource ID of the DB01 subnet.')
+output DB01SubnetId string = virtualDesktopVNET.properties.subnets[3].id
+
+@description('The resource ID of the Storage01 subnet.')
+output Storage01SubnetId string = virtualDesktopVNET.properties.subnets[4].id
+
+@description('The resource ID of the WebVNETIntegration01 subnet.')
+output WebVNETIntegration01SubnetId string = virtualDesktopVNET.properties.subnets[5].id
+
+@description('The resource ID of the RDServer01 subnet.')
+output RDServer01SubnetId string = virtualDesktopVNET.properties.subnets[6].id
+
+@description('The resource ID of the AVD01 subnet.')
+output AVD01SubnetId string = virtualDesktopVNET.properties.subnets[7].id

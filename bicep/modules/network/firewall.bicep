@@ -18,13 +18,14 @@ param logAnalyticsWorkspaceId string
 // ── Public IP ─────────────────────────────────────────────────────────────────
 
 resource firewallPublicIp 'Microsoft.Network/publicIPAddresses@2023-05-01' = {
-  name: '${environmentName}-fw-pip'
+  name: '${environmentName}-PIP-AzureFirewall-01'
   location: location
   tags: tags
   sku: {
     name: 'Standard'
     tier: 'Regional'
   }
+  zones: ['1', '2', '3']
   properties: {
     publicIPAllocationMethod: 'Static'
     publicIPAddressVersion: 'IPv4'
@@ -34,12 +35,12 @@ resource firewallPublicIp 'Microsoft.Network/publicIPAddresses@2023-05-01' = {
 // ── Firewall Policy ───────────────────────────────────────────────────────────
 
 resource firewallPolicy 'Microsoft.Network/firewallPolicies@2023-05-01' = {
-  name: '${environmentName}-fw-policy'
+  name: '${environmentName}-AFWP-Core-01'
   location: location
   tags: tags
   properties: {
     sku: {
-      tier: 'Standard'
+      tier: 'Premium'
     }
     threatIntelMode: 'Alert'
     dnsSettings: {
@@ -51,7 +52,7 @@ resource firewallPolicy 'Microsoft.Network/firewallPolicies@2023-05-01' = {
 // ── Firewall Policy Rule Collection Group ─────────────────────────────────────
 
 resource ruleCollectionGroup 'Microsoft.Network/firewallPolicies/ruleCollectionGroups@2023-05-01' = {
-  name: '${environmentName}-rcg'
+  name: '${environmentName}-AFWP-RCG-01'
   parent: firewallPolicy
   properties: {
     priority: 200
@@ -142,18 +143,18 @@ resource ruleCollectionGroup 'Microsoft.Network/firewallPolicies/ruleCollectionG
 // ── Azure Firewall ────────────────────────────────────────────────────────────
 
 resource firewall 'Microsoft.Network/azureFirewalls@2023-05-01' = {
-  name: '${environmentName}-fw'
+  name: '${environmentName}-AFW-Core-01'
   location: location
   tags: tags
   properties: {
     sku: {
       name: 'AZFW_VNet'
-      tier: 'Standard'
+      tier: 'Premium'
     }
     firewallPolicy: { id: firewallPolicy.id }
     ipConfigurations: [
       {
-        name: 'ipconfig1'
+        name: 'IPConfig01'
         properties: {
           publicIPAddress: { id: firewallPublicIp.id }
           subnet: { id: firewallSubnetId }
