@@ -19,6 +19,8 @@ param dbSubnetPrefix string = '10.100.60.128/27'
 @description('Address prefix for the storage subnet, used with Azure Storage Accounts and FSLogix.')
 param storageSubnetPrefix string = '10.100.60.160/27'
 
+param secretsSubnetPrefix string = ''
+
 param webVNETIntegrationSubnetPrefix string = '10.100.60.192/27'
 
 @description('Address prefix for the first Data Science Server subnet.')
@@ -80,6 +82,16 @@ resource virtualDesktopVNET 'Microsoft.Network/virtualNetworks@2023-05-01' = {
         name: 'Storage01'
         properties: {
           addressPrefix: storageSubnetPrefix
+          networkSecurityGroup: { id: ResearcherNSG.id }
+          privateEndpointNetworkPolicies: 'Enabled'
+          privateLinkServiceNetworkPolicies: 'Enabled'
+          serviceEndpoints: []
+        }
+      }
+      {
+        name: 'Secrets01'
+        properties: {
+          addressPrefix: secretsSubnetPrefix
           networkSecurityGroup: { id: ResearcherNSG.id }
           privateEndpointNetworkPolicies: 'Enabled'
           privateLinkServiceNetworkPolicies: 'Enabled'

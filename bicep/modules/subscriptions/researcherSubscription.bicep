@@ -78,8 +78,8 @@ module keyvault '../keyvault/keyvault.bicep' = {
     location: location
     environmentName: environmentName
     tags: tags
-    subnetId: network.outputs.privateEndpointSubnetId
-    vnetId: network.outputs.vnetId
+    subnetId: researcherNetworking.outputs.privateEndpointSubnetId
+    vnetId: researcherNetworking.outputs.vnetId
     logAnalyticsWorkspaceId: monitoring.outputs.workspaceResourceId
   }
 }
@@ -108,8 +108,8 @@ module storageSecure '../storage/storageSecure.bicep' = {
     location: location
     environmentName: environmentName
     tags: tags
-    subnetId: network.outputs.privateEndpointSubnetId
-    vnetId: network.outputs.vnetId
+    subnetId: researcherNetworking.outputs.privateEndpointSubnetId
+    vnetId: researcherNetworking.outputs.vnetId
     logAnalyticsWorkspaceId: monitoring.outputs.workspaceResourceId
     keyVaultId: keyvault.outputs.keyVaultId
   }
@@ -124,8 +124,8 @@ module datafactory '../datafactory/datafactory.bicep' = {
     location: location
     environmentName: environmentName
     tags: tags
-    subnetId: network.outputs.dataIntegrationSubnetId
-    vnetId: network.outputs.vnetId
+    subnetId: researcherNetworking.outputs.dataIntegrationSubnetId
+    vnetId: researcherNetworking.outputs.vnetId
     logAnalyticsWorkspaceId: monitoring.outputs.workspaceResourceId
     secureStorageAccountId: storageSecure.outputs.storageAccountId
     secureStorageAccountName: storageSecure.outputs.storageAccountName
@@ -156,7 +156,7 @@ module datasciencevm '../compute/datasciencevm.bicep' = {
     location: location
     environmentName: environmentName
     tags: tags
-    subnetId: network.outputs.computeSubnetId
+    subnetId: researcherNetworking.outputs.computeSubnetId
     logAnalyticsWorkspaceId: monitoring.outputs.workspaceResourceId
     vmSize: dsVmSize
     vmCount: dsVmCount
