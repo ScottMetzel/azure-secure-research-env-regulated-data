@@ -6,6 +6,9 @@ param location string
 @maxLength(20)
 param environmentName string
 
+@description('The name of the Log Analytics Workspace to create.')
+param workspaceName string = '${environmentName}-LAW-DefaultName-01'
+
 @description('Tags to apply to all resources.')
 param tags object
 
@@ -17,7 +20,7 @@ param retentionInDays int = 90
 // ── Resources ────────────────────────────────────────────────────────────────
 
 resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
-  name: '${environmentName}-LAW-SOC-01'
+  name: workspaceName
   location: location
   tags: tags
   properties: {

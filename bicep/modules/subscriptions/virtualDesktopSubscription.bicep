@@ -28,6 +28,9 @@ param rdServerSubnetPrefix string = '10.100.41.0/24'
 @description('Address prefix for the first Azure Virtual Desktop subnet.')
 param avdSubnetPrefix string = '10.100.42.0/24'
 
+@description('The private IP address of the Azure Firewall deployed in the hub, used as the next hop for forced tunneling from the Remote Desktop Server subnet.')
+param azureFirewallPrivateIp string
+
 @description('Local administrator username for VMs.')
 param adminUsername string
 
@@ -35,7 +38,8 @@ param adminUsername string
 @secure()
 param adminPassword string
 
-param logAnalyticsWorkspaceResourceId string
+@description('The Resource ID of the Log Analytics Workspace to link for monitoring. This should be the workspace deployed in the hub subscription.')
+param logAnalyticsWorkspaceId string
 
 @description('Tags applied to every resource.')
 param tags object = {
@@ -83,6 +87,7 @@ module networkingVirtualDesktop '../network/networking_virtualDesktop.bicep' = {
     webVNETIntegrationSubnetPrefix: webVNETIntegrationSubnetPrefix
     rdServerSubnetPrefix: rdServerSubnetPrefix
     avdSubnetPrefix: avdSubnetPrefix
+    azureFirewallPrivateIp: azureFirewallPrivateIp
   }
 }
 
@@ -98,7 +103,7 @@ module bastion '../bastion/bastion.bicep' = {
     tags: tags
     bastionSubnetId: networkingVirtualDesktop.outputs.AzureBastionSubnetId
 
-    logAnalyticsWorkspaceId: logAnalyticsWorkspaceResourceId
+    logAnalyticsWorkspaceId: logAnalyticsWorkspaceId
   }
 }
 
@@ -113,8 +118,8 @@ module researchVm '../compute/researchvm.bicep' = {
     location: location
     environmentName: environmentName
     tags: tags
-    subnetId: hubVnet.outputs.researchSubnetId
-    logAnalyticsWorkspaceId: monitoring.outputs.workspaceResourceId
+    subnetId: networkingVirtualDesktop.outputs.RDServer01SubnetId
+    logAnalyticsWorkspaceId: logAnalyticsWorkspaceId
     adminUsername: adminUsername
     adminPassword: adminPassword
   }

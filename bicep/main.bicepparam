@@ -9,7 +9,7 @@ param adminUsername = 'sreAdmin'
 // Replace with a strong password or reference an Azure Key Vault secret using
 // the syntax: readEnvironmentVariable('ADMIN_PASSWORD') (bicep param files support this)
 param adminPassword = 'REPLACE_WITH_SECURE_PASSWORD'
-param approverEmail = 'data-approver@example.com'
+param dataApproverEmail = 'data-approver@example.com'
 
 param researcherSubscriptionID = '00000000-0000-0000-0000-000000000000'
 param hubSubscriptionID = '00000000-0000-0000-0000-000000000000'
@@ -27,12 +27,6 @@ param tags = {
   costCenter: 'research-it'
 }
 
-// Spoke VNet address space
-param vnetAddressPrefix = '10.0.0.0/16'
+param researcherVMSize = 'Standard_D8s_v5'
 
-// Hub VNet address space (must not overlap with spoke)
-param hubVnetAddressPrefix = '10.1.0.0/16'
-
-param dsVmSize = 'Standard_D8s_v5'
-
-param dsVmCount = 1
+param researcherVMCount = 1

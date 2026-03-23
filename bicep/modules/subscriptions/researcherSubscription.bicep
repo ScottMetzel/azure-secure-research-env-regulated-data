@@ -23,6 +23,30 @@ param webVNETIntegrationSubnetPrefix string = '10.100.60.192/27'
 @description('Address prefix for the first Data Science Server subnet.')
 param researcherServerSubnetPrefix string = '10.100.61.0/28'
 
+@description('The private IP address of the Azure Firewall deployed in the hub, used as the next hop for forced tunneling from the Remote Desktop Server subnet.')
+param azureFirewallPrivateIp string
+
+@description('Local administrator username for VMs.')
+param adminUsername string
+
+@description('Local administrator password for VMs.')
+@secure()
+param adminPassword string
+
+@description('VM size for Data Science VMs.')
+param researcherVMSize string = 'Standard_D8s_v5'
+
+@description('Number of Data Science VMs.')
+@minValue(1)
+@maxValue(1)
+param researcherVMCount int = 1
+
+@description('The email address of the data approver, who will receive notifications and approval requests when researchers attempt to upload data to the secure environment.')
+param dataApproverEmail string
+
+@description('The Resource ID of the Log Analytics Workspace to link for monitoring. This should be the workspace deployed in the hub subscription.')
+param logAnalyticsWorkspaceId string
+
 @description('Tags applied to every resource.')
 param tags object = {
   workloadName: 'SILO'
@@ -66,6 +90,7 @@ module researcherNetworking '../network/networking_researcher.bicep' = {
     storageSubnetPrefix: storageSubnetPrefix
     webVNETIntegrationSubnetPrefix: webVNETIntegrationSubnetPrefix
     researcherServerSubnetPrefix: researcherServerSubnetPrefix
+    azureFirewallPrivateIp: azureFirewallPrivateIp
   }
 }
 
@@ -78,9 +103,9 @@ module keyvault '../keyvault/keyvault.bicep' = {
     location: location
     environmentName: environmentName
     tags: tags
-    subnetId: researcherNetworking.outputs.privateEndpointSubnetId
+    subnetId: researcherNetworking.outputs.Secrets01SubnetId
     vnetId: researcherNetworking.outputs.vnetId
-    logAnalyticsWorkspaceId: monitoring.outputs.workspaceResourceId
+    logAnalyticsWorkspaceId: logAnalyticsWorkspaceId
   }
 }
 
@@ -95,7 +120,7 @@ module storageIngestion '../storage/storageIngestion.bicep' = {
     location: location
     environmentName: environmentName
     tags: tags
-    logAnalyticsWorkspaceId: monitoring.outputs.workspaceResourceId
+    logAnalyticsWorkspaceId: logAnalyticsWorkspaceId
   }
 }
 
@@ -108,9 +133,9 @@ module storageSecure '../storage/storageSecure.bicep' = {
     location: location
     environmentName: environmentName
     tags: tags
-    subnetId: researcherNetworking.outputs.privateEndpointSubnetId
+    subnetId: researcherNetworking.outputs.Storage01SubnetId
     vnetId: researcherNetworking.outputs.vnetId
-    logAnalyticsWorkspaceId: monitoring.outputs.workspaceResourceId
+    logAnalyticsWorkspaceId: logAnalyticsWorkspaceId
     keyVaultId: keyvault.outputs.keyVaultId
   }
 }
@@ -124,9 +149,9 @@ module datafactory '../datafactory/datafactory.bicep' = {
     location: location
     environmentName: environmentName
     tags: tags
-    subnetId: researcherNetworking.outputs.dataIntegrationSubnetId
+    subnetId: researcherNetworking.outputs.App01SubnetId
     vnetId: researcherNetworking.outputs.vnetId
-    logAnalyticsWorkspaceId: monitoring.outputs.workspaceResourceId
+    logAnalyticsWorkspaceId: logAnalyticsWorkspaceId
     secureStorageAccountId: storageSecure.outputs.storageAccountId
     secureStorageAccountName: storageSecure.outputs.storageAccountName
     keyVaultId: keyvault.outputs.keyVaultId
@@ -156,10 +181,10 @@ module datasciencevm '../compute/datasciencevm.bicep' = {
     location: location
     environmentName: environmentName
     tags: tags
-    subnetId: researcherNetworking.outputs.computeSubnetId
-    logAnalyticsWorkspaceId: monitoring.outputs.workspaceResourceId
-    vmSize: dsVmSize
-    vmCount: dsVmCount
+    subnetId: researcherNetworking.outputs.ResearcherVMSubnet01SubnetId
+    logAnalyticsWorkspaceId: logAnalyticsWorkspaceId
+    vmSize: researcherVMSize
+    vmCount: researcherVMCount
     adminUsername: adminUsername
     adminPassword: adminPassword
   }
@@ -175,8 +200,8 @@ module egressApproval '../logicapp/egressApproval.bicep' = {
     location: location
     environmentName: environmentName
     tags: tags
-    logAnalyticsWorkspaceId: monitoring.outputs.workspaceResourceId
-    approverEmail: approverEmail
+    logAnalyticsWorkspaceId: logAnalyticsWorkspaceId
+    approverEmail: dataApproverEmail
     secureStorageAccountId: storageSecure.outputs.storageAccountId
     secureStorageAccountName: storageSecure.outputs.storageAccountName
     keyVaultId: keyvault.outputs.keyVaultId

@@ -29,10 +29,12 @@ param rdServerSubnetPrefix string = '10.100.41.0/24'
 @description('Address prefix for the first Azure Virtual Desktop subnet.')
 param avdSubnetPrefix string = '10.100.42.0/24'
 
+@description('The private IP address of the Azure Firewall deployed in the hub, used as the next hop for forced tunneling from the Remote Desktop Server subnet.')
+param azureFirewallPrivateIp string
+
 // ── NSGs ──────────────────────────────────────────────────────────────────────
 // Azure Bastion requires specific inbound/outbound rules.
 // See: https://learn.microsoft.com/azure/bastion/bastion-nsg
-
 resource AzureBastionNSG 'Microsoft.Network/networkSecurityGroups@2023-05-01' = {
   name: '${environmentName}-NSG-Bastion-01'
   location: location
@@ -194,9 +196,30 @@ resource RemoteDesktopNSG 'Microsoft.Network/networkSecurityGroups@2023-05-01' =
   }
 }
 
+// ── Route Tables ──────────────────────────────────────────────────────────────────────
+resource remoteDesktopVNETRouteTable 'Microsoft.Network/routeTables@2025-05-01' = {
+  location: location
+  name: '${environmentName}-RT-RemoteDesktop-01'
+  properties: {
+    disableBgpRoutePropagation: true
+    routes: [
+      {
+        name: 'Default'
+        properties: {
+          addressPrefix: '0.0.0.0/0'
+          nextHopIpAddress: azureFirewallPrivateIp
+          nextHopType: 'VirtualAppliance'
+        }
+        type: 'string'
+      }
+    ]
+  }
+  tags: tags
+}
+
 // ── Virtual Network ───────────────────────────────────────────────────────────
 
-resource virtualDesktopVNET 'Microsoft.Network/virtualNetworks@2023-05-01' = {
+resource virtualDesktopSpokeVNET 'Microsoft.Network/virtualNetworks@2023-05-01' = {
   name: '${environmentName}-VNET-RemoteDesktop-01'
   location: location
   tags: tags
@@ -212,6 +235,9 @@ resource virtualDesktopVNET 'Microsoft.Network/virtualNetworks@2023-05-01' = {
           networkSecurityGroup: { id: AzureBastionNSG.id }
           privateEndpointNetworkPolicies: 'Disabled'
           privateLinkServiceNetworkPolicies: 'Enabled'
+          routeTable: {
+            id: remoteDesktopVNETRouteTable.id
+          }
         }
       }
       {
@@ -221,7 +247,9 @@ resource virtualDesktopVNET 'Microsoft.Network/virtualNetworks@2023-05-01' = {
           networkSecurityGroup: { id: RemoteDesktopNSG.id }
           privateEndpointNetworkPolicies: 'Enabled'
           privateLinkServiceNetworkPolicies: 'Enabled'
-          serviceEndpoints: []
+          routeTable: {
+            id: remoteDesktopVNETRouteTable.id
+          }
         }
       }
       {
@@ -231,7 +259,9 @@ resource virtualDesktopVNET 'Microsoft.Network/virtualNetworks@2023-05-01' = {
           networkSecurityGroup: { id: RemoteDesktopNSG.id }
           privateEndpointNetworkPolicies: 'Enabled'
           privateLinkServiceNetworkPolicies: 'Enabled'
-          serviceEndpoints: []
+          routeTable: {
+            id: remoteDesktopVNETRouteTable.id
+          }
         }
       }
       {
@@ -241,7 +271,9 @@ resource virtualDesktopVNET 'Microsoft.Network/virtualNetworks@2023-05-01' = {
           networkSecurityGroup: { id: RemoteDesktopNSG.id }
           privateEndpointNetworkPolicies: 'Enabled'
           privateLinkServiceNetworkPolicies: 'Enabled'
-          serviceEndpoints: []
+          routeTable: {
+            id: remoteDesktopVNETRouteTable.id
+          }
         }
       }
       {
@@ -251,7 +283,9 @@ resource virtualDesktopVNET 'Microsoft.Network/virtualNetworks@2023-05-01' = {
           networkSecurityGroup: { id: RemoteDesktopNSG.id }
           privateEndpointNetworkPolicies: 'Enabled'
           privateLinkServiceNetworkPolicies: 'Enabled'
-          serviceEndpoints: []
+          routeTable: {
+            id: remoteDesktopVNETRouteTable.id
+          }
         }
       }
       {
@@ -261,7 +295,9 @@ resource virtualDesktopVNET 'Microsoft.Network/virtualNetworks@2023-05-01' = {
           networkSecurityGroup: { id: RemoteDesktopNSG.id }
           privateEndpointNetworkPolicies: 'Disabled'
           privateLinkServiceNetworkPolicies: 'Enabled'
-          serviceEndpoints: []
+          routeTable: {
+            id: remoteDesktopVNETRouteTable.id
+          }
         }
       }
       {
@@ -271,6 +307,9 @@ resource virtualDesktopVNET 'Microsoft.Network/virtualNetworks@2023-05-01' = {
           networkSecurityGroup: { id: RemoteDesktopNSG.id }
           privateEndpointNetworkPolicies: 'Disabled'
           privateLinkServiceNetworkPolicies: 'Enabled'
+          routeTable: {
+            id: remoteDesktopVNETRouteTable.id
+          }
         }
       }
       {
@@ -280,7 +319,9 @@ resource virtualDesktopVNET 'Microsoft.Network/virtualNetworks@2023-05-01' = {
           networkSecurityGroup: { id: RemoteDesktopNSG.id }
           privateEndpointNetworkPolicies: 'Disabled'
           privateLinkServiceNetworkPolicies: 'Enabled'
-          serviceEndpoints: []
+          routeTable: {
+            id: remoteDesktopVNETRouteTable.id
+          }
         }
       }
     ]
@@ -290,31 +331,31 @@ resource virtualDesktopVNET 'Microsoft.Network/virtualNetworks@2023-05-01' = {
 // ── Outputs ───────────────────────────────────────────────────────────────────
 
 @description('The resource ID of the virtual network.')
-output vnetId string = virtualDesktopVNET.id
+output vnetId string = virtualDesktopSpokeVNET.id
 
 @description('The name of the virtual network.')
-output vnetName string = virtualDesktopVNET.name
+output vnetName string = virtualDesktopSpokeVNET.name
 
 @description('The resource ID of the Azure Bastion subnet.')
-output AzureBastionSubnetId string = virtualDesktopVNET.properties.subnets[0].id
+output AzureBastionSubnetId string = virtualDesktopSpokeVNET.properties.subnets[0].id
 
 @description('The resource ID of the Web01 subnet.')
-output Web01SubnetId string = virtualDesktopVNET.properties.subnets[1].id
+output Web01SubnetId string = virtualDesktopSpokeVNET.properties.subnets[1].id
 
 @description('The resource ID of the App01 subnet.')
-output App01SubnetId string = virtualDesktopVNET.properties.subnets[2].id
+output App01SubnetId string = virtualDesktopSpokeVNET.properties.subnets[2].id
 
 @description('The resource ID of the DB01 subnet.')
-output DB01SubnetId string = virtualDesktopVNET.properties.subnets[3].id
+output DB01SubnetId string = virtualDesktopSpokeVNET.properties.subnets[3].id
 
 @description('The resource ID of the Storage01 subnet.')
-output Storage01SubnetId string = virtualDesktopVNET.properties.subnets[4].id
+output Storage01SubnetId string = virtualDesktopSpokeVNET.properties.subnets[4].id
 
 @description('The resource ID of the WebVNETIntegration01 subnet.')
-output WebVNETIntegration01SubnetId string = virtualDesktopVNET.properties.subnets[5].id
+output WebVNETIntegration01SubnetId string = virtualDesktopSpokeVNET.properties.subnets[5].id
 
 @description('The resource ID of the RDServer01 subnet.')
-output RDServer01SubnetId string = virtualDesktopVNET.properties.subnets[6].id
+output RDServer01SubnetId string = virtualDesktopSpokeVNET.properties.subnets[6].id
 
 @description('The resource ID of the AVD01 subnet.')
-output AVD01SubnetId string = virtualDesktopVNET.properties.subnets[7].id
+output AVD01SubnetId string = virtualDesktopSpokeVNET.properties.subnets[7].id

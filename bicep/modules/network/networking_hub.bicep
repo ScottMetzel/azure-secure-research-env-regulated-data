@@ -10,7 +10,7 @@ param environmentName string
 param tags object
 
 @description('Address prefix for the hub virtual network.')
-param hubVnetAddressPrefix string = '10.100.0.0/23'
+param hubVNETAddressPrefix string = '10.100.0.0/23'
 
 @description('Address prefix for AzureFirewallSubnet (minimum /26).')
 param firewallSubnetPrefix string = '10.100.0.0/26'
@@ -23,13 +23,13 @@ param azDNSPrivateResolverOutboundSubnet string = '10.100.0.80/28'
 // ── Hub Virtual Network ───────────────────────────────────────────────────────
 // AzureFirewallSubnet and AzureBastionSubnet are reserved names required by Azure.
 
-resource hubVnet 'Microsoft.Network/virtualNetworks@2023-05-01' = {
+resource hubVNET 'Microsoft.Network/virtualNetworks@2023-05-01' = {
   name: '${environmentName}-VNET-Hub-01'
   location: location
   tags: tags
   properties: {
     addressSpace: {
-      addressPrefixes: [hubVnetAddressPrefix]
+      addressPrefixes: [hubVNETAddressPrefix]
     }
     subnets: [
       {
@@ -66,16 +66,16 @@ resource hubVnet 'Microsoft.Network/virtualNetworks@2023-05-01' = {
 // ── Outputs ───────────────────────────────────────────────────────────────────
 
 @description('The resource ID of the hub virtual network.')
-output VNETid string = hubVnet.id
+output VNETid string = hubVNET.id
 
 @description('The name of the hub virtual network.')
-output VNETName string = hubVnet.name
+output VNETName string = hubVNET.name
 
 @description('The resource ID of AzureFirewallSubnet.')
-output firewallSubnetId string = hubVnet.properties.subnets[0].id
+output firewallSubnetId string = hubVNET.properties.subnets[0].id
 
 @description('The resource ID of AzDNSPRInbound01 subnet.')
-output azDNSPRInboundSubnetId string = hubVnet.properties.subnets[1].id
+output azDNSPRInboundSubnetId string = hubVNET.properties.subnets[1].id
 
 @description('The resource ID of AzDNSPROutbound01 subnet.')
-output azDNSPROutboundSubnetId string = hubVnet.properties.subnets[2].id
+output azDNSPROutboundSubnetId string = hubVNET.properties.subnets[2].id

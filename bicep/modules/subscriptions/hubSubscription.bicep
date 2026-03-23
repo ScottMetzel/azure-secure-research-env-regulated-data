@@ -63,6 +63,7 @@ module logAnalytics '../monitoring/logAnalytics.bicep' = {
   params: {
     location: location
     environmentName: environmentName
+    workspaceName: '${environmentName}-LAW-SOC-01'
     tags: tags
   }
 }
@@ -113,6 +114,9 @@ output firewallId string = firewallandPolicy.outputs.firewallId
 
 @description('The name of the Azure Firewall.')
 output firewallName string = firewallandPolicy.outputs.firewallName
+
+@description('The private IP address of the Azure Firewall.')
+output firewallPrivateIp string = firewallandPolicy.outputs.firewallPrivateIp
 
 @description('The resource ID of the Azure Private DNS Resolver.')
 output privateDNSResolverId string = privateDNSResolver.outputs.privateDNSResolverId

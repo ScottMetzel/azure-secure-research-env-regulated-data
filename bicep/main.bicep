@@ -41,22 +41,16 @@ param hubSubscriptionID string
 @maxLength(36)
 param virtualDesktopSubscriptionID string
 
-@description('Email address to receive data-egress approval requests.')
-param approverEmail string
-
-@description('Address prefix for the spoke virtual network.')
-param vnetAddressPrefix string = '10.0.0.0/16'
-
-@description('Address prefix for the hub virtual network (must not overlap with spoke).')
-param hubVnetAddressPrefix string = '10.1.0.0/16'
-
 @description('VM size for Data Science VMs.')
-param dsVmSize string = 'Standard_D8s_v5'
+param researcherVMSize string = 'Standard_D8s_v5'
 
 @description('Number of Data Science VMs.')
 @minValue(1)
 @maxValue(1)
-param dsVmCount int = 1
+param researcherVMCount int = 1
+
+@description('The email address of the data approver, who will receive notifications and approval requests when researchers attempt to upload data to the secure environment.')
+param dataApproverEmail string
 
 // ── Subscription deployments ───────────────────────────────────────────────────────────
 
@@ -80,7 +74,8 @@ module virtualDesktopSubscription 'modules/subscriptions/virtualDesktopSubscript
     environmentName: environmentName
     adminUsername: adminUsername
     adminPassword: adminPassword
-    logAnalyticsWorkspaceResourceId: hubSubscription.outputs.logAnalyticsWorkspaceResourceId
+    logAnalyticsWorkspaceId: hubSubscription.outputs.logAnalyticsWorkspaceResourceId
+    azureFirewallPrivateIp: hubSubscription.outputs.firewallPrivateIp
     tags: tags
   }
 }
@@ -93,6 +88,13 @@ module researcherSubscription 'modules/subscriptions/researcherSubscription.bice
     location: location
     environmentName: environmentName
     tags: tags
+    adminUsername: adminUsername
+    adminPassword: adminPassword
+    researcherVMSize: researcherVMSize
+    researcherVMCount: researcherVMCount
+    dataApproverEmail: dataApproverEmail
+    logAnalyticsWorkspaceId: hubSubscription.outputs.logAnalyticsWorkspaceResourceId
+    azureFirewallPrivateIp: hubSubscription.outputs.firewallPrivateIp
   }
 }
 
