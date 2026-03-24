@@ -47,11 +47,23 @@ param dataApproverEmail string
 @description('The Resource ID of the Log Analytics Workspace to link for monitoring. This should be the workspace deployed in the hub subscription.')
 param logAnalyticsWorkspaceId string
 
+@description('Resource ID of the Azure Blob Storage Private DNS Zone.')
+param blobStoragePrivateDnsZoneId string
+
+@description('Resource ID of the Key Vault Private DNS Zone.')
+param keyVaultPrivateDnsZoneId string
+
+@description('Resource ID of the Data Factory Private DNS Zone.')
+param dataFactoryPrivateDnsZoneId string
+
+@description('Resource ID of the Azure ML Private DNS Zone.')
+param azureMLPrivateDnsZoneId string
+
+@description('The string array of DNS servers to use on the Virtual Network.')
+param vNETDNSServers array
+
 @description('Tags applied to every resource.')
-param tags object = {
-  workloadName: 'SILO'
-  environment: environmentName
-}
+param tags object
 
 // ── Resource Groups ───────────────────────────────────────────────────────────
 @description('Data owner/approver resource group — contains the publicly-accessible data ingestion storage account, Logic App, and Fabric Data Factory resources.')
@@ -90,6 +102,7 @@ module researcherNetworking '../network/networking_researcher.bicep' = {
     storageSubnetPrefix: storageSubnetPrefix
     webVNETIntegrationSubnetPrefix: webVNETIntegrationSubnetPrefix
     researcherServerSubnetPrefix: researcherServerSubnetPrefix
+    vNETDNSServers: vNETDNSServers
     azureFirewallPrivateIp: azureFirewallPrivateIp
   }
 }
@@ -106,6 +119,7 @@ module keyvault '../keyvault/keyvault.bicep' = {
     subnetId: researcherNetworking.outputs.Secrets01SubnetId
     vnetId: researcherNetworking.outputs.vnetId
     logAnalyticsWorkspaceId: logAnalyticsWorkspaceId
+    keyVaultPrivateDnsZoneId: keyVaultPrivateDnsZoneId // The first zone in the array is the Key Vault zone.
   }
 }
 
@@ -137,6 +151,7 @@ module storageSecure '../storage/storageSecure.bicep' = {
     vnetId: researcherNetworking.outputs.vnetId
     logAnalyticsWorkspaceId: logAnalyticsWorkspaceId
     keyVaultId: keyvault.outputs.keyVaultId
+    blobStoragePrivateDnsZoneId: blobStoragePrivateDnsZoneId
   }
 }
 
@@ -155,6 +170,7 @@ module datafactory '../datafactory/datafactory.bicep' = {
     secureStorageAccountId: storageSecure.outputs.storageAccountId
     secureStorageAccountName: storageSecure.outputs.storageAccountName
     keyVaultId: keyvault.outputs.keyVaultId
+    dataFactoryPrivateDnsZoneId: dataFactoryPrivateDnsZoneId
   }
 }
 

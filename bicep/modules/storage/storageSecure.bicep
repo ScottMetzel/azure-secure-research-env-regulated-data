@@ -23,9 +23,15 @@ param logAnalyticsWorkspaceId string
 #disable-next-line no-unused-params
 param keyVaultId string = ''
 
+@description('Resource ID of the Azure Blob Storage Private DNS Zone.')
+param blobStoragePrivateDnsZoneId string
+
 // ── Storage Account ───────────────────────────────────────────────────────────
 
-var storageAccountName = toLower(take('${replace(environmentName, '-', '')}secure${uniqueString(resourceGroup().id)}', 24))
+var storageAccountName = toLower(take(
+  '${replace(environmentName, '-', '')}secure${uniqueString(resourceGroup().id)}',
+  24
+))
 
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {
   name: storageAccountName
@@ -84,14 +90,6 @@ resource immutabilityPolicy 'Microsoft.Storage/storageAccounts/blobServices/cont
   }
 }
 
-// ── Private DNS Zone ──────────────────────────────────────────────────────────
-
-resource blobDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' existing = {
-  // Zone name is mandated by Azure Private Link and cannot be changed.
-  #disable-next-line no-hardcoded-env-urls
-  name: 'privatelink.blob.core.windows.net'
-}
-
 // ── Private Endpoint ──────────────────────────────────────────────────────────
 
 resource secureStoragePrivateEndpoint 'Microsoft.Network/privateEndpoints@2023-05-01' = {
@@ -120,7 +118,7 @@ resource secureStorageDnsZoneGroup 'Microsoft.Network/privateEndpoints/privateDn
       {
         name: 'privatelink-blob-core-windows-net'
         properties: {
-          privateDnsZoneId: blobDnsZone.id
+          privateDnsZoneId: blobStoragePrivateDnsZoneId
         }
       }
     ]

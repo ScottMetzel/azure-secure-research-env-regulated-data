@@ -20,7 +20,7 @@ var peeringName = '${localVnetName}-to-${remoteVnetName}'
 
 // ── Local VNet (existing) ─────────────────────────────────────────────────────
 
-resource localVnet 'Microsoft.Network/virtualNetworks@2023-05-01' existing = {
+resource localVnet 'Microsoft.Network/virtualNetworks@2025-05-01' existing = {
   name: localVnetName
 }
 

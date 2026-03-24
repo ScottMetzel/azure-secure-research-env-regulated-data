@@ -1,8 +1,8 @@
 # azure-secure-research-env-regulated-data
 
-An Azure-based Secure Research Environment (SRE) for regulated data, implemented as a set of modular Azure Bicep templates.
+An Azure-based Secure Research Environment (SRERD) for regulated data, implemented as a set of modular Azure Bicep templates.
 
-The architecture is an implementation of the reference design published at  
+The architecture is an implementation of the reference design published at:
 [Design a Secure Research Environment for Regulated Data – Azure Architecture Center](https://learn.microsoft.com/en-us/azure/architecture/ai-ml/architecture/secure-compute-for-research).
 
 ---
@@ -91,7 +91,7 @@ Optional overrides (with safe defaults):
 | Parameter | Default | Description |
 |---|---|---|
 | `location` | `eastus` | Azure region |
-| `environmentName` | `sre` | Prefix for all resource names and RG names |
+| `environmentName` | `SRERD` | Prefix for all resource names and RG names |
 | `vnetAddressPrefix` | `10.0.0.0/16` | Spoke VNet CIDR |
 | `hubVnetAddressPrefix` | `10.1.0.0/16` | Hub VNet CIDR (must not overlap with spoke) |
 | `dsVmSize` | `Standard_D8s_v5` | Data Science VM SKU |

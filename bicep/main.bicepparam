@@ -17,9 +17,9 @@ param virtualDesktopSubscriptionID = '00000000-0000-0000-0000-000000000000'
 
 // ── Optional overrides ────────────────────────────────────────────────────────
 
-param location = 'eastus'
+param location = 'westus2'
 
-param environmentName = 'sre'
+param environmentName = 'SRERD'
 
 param tags = {
   environment: 'secure-research'

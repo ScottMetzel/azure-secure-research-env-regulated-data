@@ -115,114 +115,122 @@ var imageReference = aadJoin
       version: 'latest'
     }
 
-resource sessionHostNics 'Microsoft.Network/networkInterfaces@2023-05-01' = [for i in range(0, vmCount): {
-  name: '${environmentName}-avd-nic-${i}'
-  location: location
-  tags: tags
-  properties: {
-    ipConfigurations: [
-      {
-        name: 'ipconfig1'
-        properties: {
-          privateIPAllocationMethod: 'Dynamic'
-          subnet: { id: subnetId }
+resource sessionHostNics 'Microsoft.Network/networkInterfaces@2023-05-01' = [
+  for i in range(0, vmCount): {
+    name: '${environmentName}-avd-nic-${i}'
+    location: location
+    tags: tags
+    properties: {
+      ipConfigurations: [
+        {
+          name: 'ipconfig1'
+          properties: {
+            privateIPAllocationMethod: 'Dynamic'
+            subnet: { id: subnetId }
+          }
         }
-      }
-    ]
-    enableAcceleratedNetworking: true
-  }
-}]
-
-resource sessionHostVMs 'Microsoft.Compute/virtualMachines@2023-07-01' = [for i in range(0, vmCount): {
-  name: '${environmentName}-avd-vm-${i}'
-  location: location
-  tags: tags
-  identity: {
-    type: 'SystemAssigned'
-  }
-  properties: {
-    hardwareProfile: { vmSize: vmSize }
-    osProfile: {
-      computerName: 'avd-vm-${i}'
-      adminUsername: adminUsername
-      adminPassword: adminPassword
-      windowsConfiguration: {
-        enableAutomaticUpdates: true
-        patchSettings: {
-          patchMode: 'AutomaticByPlatform'
-          assessmentMode: 'AutomaticByPlatform'
-        }
-      }
-    }
-    storageProfile: {
-      imageReference: imageReference
-      osDisk: {
-        createOption: 'FromImage'
-        managedDisk: { storageAccountType: 'Premium_LRS' }
-        deleteOption: 'Delete'
-      }
-    }
-    networkProfile: {
-      networkInterfaces: [
-        { id: sessionHostNics[i].id, properties: { deleteOption: 'Delete' } }
       ]
+      enableAcceleratedNetworking: true
     }
-    diagnosticsProfile: {
-      bootDiagnostics: { enabled: true }
-    }
-    licenseType: aadJoin ? 'Windows_Client' : 'Windows_Server'
   }
-  dependsOn: [sessionHostNics[i]]
-}]
+]
+
+resource sessionHostVMs 'Microsoft.Compute/virtualMachines@2023-07-01' = [
+  for i in range(0, vmCount): {
+    name: '${environmentName}-avd-vm-${i}'
+    location: location
+    tags: tags
+    identity: {
+      type: 'SystemAssigned'
+    }
+    properties: {
+      hardwareProfile: { vmSize: vmSize }
+      osProfile: {
+        computerName: 'avd-vm-${i}'
+        adminUsername: adminUsername
+        adminPassword: adminPassword
+        windowsConfiguration: {
+          enableAutomaticUpdates: true
+          patchSettings: {
+            patchMode: 'AutomaticByPlatform'
+            assessmentMode: 'AutomaticByPlatform'
+          }
+        }
+      }
+      storageProfile: {
+        imageReference: imageReference
+        osDisk: {
+          createOption: 'FromImage'
+          managedDisk: { storageAccountType: 'Premium_LRS' }
+          deleteOption: 'Delete'
+        }
+      }
+      networkProfile: {
+        networkInterfaces: [
+          { id: sessionHostNics[i].id, properties: { deleteOption: 'Delete' } }
+        ]
+      }
+      diagnosticsProfile: {
+        bootDiagnostics: { enabled: true }
+      }
+      licenseType: aadJoin ? 'Windows_Client' : 'Windows_Server'
+    }
+    dependsOn: [sessionHostNics[i]]
+  }
+]
 
 // ── AAD Join Extension ────────────────────────────────────────────────────────
 
-resource aadJoinExtensions 'Microsoft.Compute/virtualMachines/extensions@2023-07-01' = [for i in range(0, vmCount): if (aadJoin) {
-  name: 'AADLoginForWindows'
-  parent: sessionHostVMs[i]
-  location: location
-  properties: {
-    publisher: 'Microsoft.Azure.ActiveDirectory'
-    type: 'AADLoginForWindows'
-    typeHandlerVersion: '2.0'
-    autoUpgradeMinorVersion: true
-    settings: {
-      mdmId: ''
+resource aadJoinExtensions 'Microsoft.Compute/virtualMachines/extensions@2023-07-01' = [
+  for i in range(0, vmCount): if (aadJoin) {
+    name: 'AADLoginForWindows'
+    parent: sessionHostVMs[i]
+    location: location
+    properties: {
+      publisher: 'Microsoft.Azure.ActiveDirectory'
+      type: 'AADLoginForWindows'
+      typeHandlerVersion: '2.0'
+      autoUpgradeMinorVersion: true
+      settings: {
+        mdmId: ''
+      }
     }
   }
-}]
+]
 
 // ── AVD Agent Registration Extension ─────────────────────────────────────────
 
-resource avdAgentExtensions 'Microsoft.Compute/virtualMachines/extensions@2023-07-01' = [for i in range(0, vmCount): {
-  name: 'Microsoft.PowerShell.DSC'
-  parent: sessionHostVMs[i]
-  location: location
-  properties: {
-    publisher: 'Microsoft.Powershell'
-    type: 'DSC'
-    typeHandlerVersion: '2.73'
-    autoUpgradeMinorVersion: true
-    settings: {
-      #disable-next-line no-hardcoded-env-urls
-      modulesUrl: 'https://wvdportalstorageblob.blob.core.windows.net/galleryartifacts/Configuration_09-08-2022.zip'
-      configurationFunction: 'Configuration.ps1\\AddSessionHost'
-      properties: {
-        hostPoolName: hostPool.name
-        registrationInfoTokenCredential: {
-          UserName: 'PLACEHOLDER'
-          Password: 'PrivateSettingsRef:registrationInfoToken'
+resource avdAgentExtensions 'Microsoft.Compute/virtualMachines/extensions@2023-07-01' = [
+  for i in range(0, vmCount): {
+    name: 'Microsoft.PowerShell.DSC'
+    parent: sessionHostVMs[i]
+    location: location
+    properties: {
+      publisher: 'Microsoft.Powershell'
+      type: 'DSC'
+      typeHandlerVersion: '2.73'
+      autoUpgradeMinorVersion: true
+      settings: {
+        #disable-next-line no-hardcoded-env-urls
+        modulesUrl: 'https://wvdportalstorageblob.blob.core.windows.net/galleryartifacts/Configuration_09-08-2022.zip'
+        configurationFunction: 'Configuration.ps1\\AddSessionHost'
+        properties: {
+          hostPoolName: hostPool.name
+          registrationInfoTokenCredential: {
+            UserName: 'PLACEHOLDER'
+            Password: 'PrivateSettingsRef:registrationInfoToken'
+          }
+        }
+      }
+      protectedSettings: {
+        Items: {
+          registrationInfoToken: hostPool.properties.registrationInfo.token
         }
       }
     }
-    protectedSettings: {
-      Items: {
-        registrationInfoToken: hostPool.properties.registrationInfo.token
-      }
-    }
+    dependsOn: aadJoin ? [aadJoinExtensions[i]] : []
   }
-  dependsOn: aadJoin ? [aadJoinExtensions[i]] : []
-}]
+]
 
 // ── Diagnostics ───────────────────────────────────────────────────────────────
 

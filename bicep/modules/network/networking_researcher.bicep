@@ -26,6 +26,9 @@ param webVNETIntegrationSubnetPrefix string = '10.100.60.192/27'
 @description('Address prefix for the first Data Science Server subnet.')
 param researcherServerSubnetPrefix string = '10.100.61.0/28'
 
+@description('The string array of DNS servers to use on the Virtual Network.')
+param vNETDNSServers array
+
 @description('The private IP address of the Azure Firewall deployed in the hub, used as the next hop for forced tunneling from the Remote Desktop Server subnet.')
 param azureFirewallPrivateIp string
 
@@ -63,13 +66,16 @@ resource researcherVNETRouteTable 'Microsoft.Network/routeTables@2025-05-01' = {
 
 // ── Virtual Network ───────────────────────────────────────────────────────────
 
-resource researcherSpokeVNET 'Microsoft.Network/virtualNetworks@2023-05-01' = {
+resource researcherSpokeVNET 'Microsoft.Network/virtualNetworks@2025-05-01' = {
   name: '${environmentName}-VNET-Researcher-01'
   location: location
   tags: tags
   properties: {
     addressSpace: {
       addressPrefixes: [vnetAddressPrefix]
+    }
+    dhcpOptions: {
+      dnsServers: vNETDNSServers
     }
     subnets: [
       {

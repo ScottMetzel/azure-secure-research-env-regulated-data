@@ -15,6 +15,9 @@ param firewallSubnetId string
 @description('Resource ID of the Log Analytics workspace for diagnostics.')
 param logAnalyticsWorkspaceId string
 
+@description('The DNS Servers to proxy to from the Azure Firewall DNS settings.')
+param dnsServers array
+
 // ── Public IP ─────────────────────────────────────────────────────────────────
 
 resource firewallPublicIp 'Microsoft.Network/publicIPAddresses@2023-05-01' = {
@@ -45,6 +48,7 @@ resource firewallPolicy 'Microsoft.Network/firewallPolicies@2023-05-01' = {
     threatIntelMode: 'Alert'
     dnsSettings: {
       enableProxy: true
+      servers: dnsServers
     }
   }
 }

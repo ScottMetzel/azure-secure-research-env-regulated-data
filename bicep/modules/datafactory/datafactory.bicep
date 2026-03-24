@@ -28,6 +28,9 @@ param secureStorageAccountName string
 @description('Resource ID of the Key Vault.')
 param keyVaultId string
 
+@description('Resource ID of the Data Factory Private DNS Zone.')
+param dataFactoryPrivateDnsZoneId string
+
 // ── Built-in role definition IDs ──────────────────────────────────────────────
 
 var storageBlobDataContributorRoleId = 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
@@ -70,12 +73,6 @@ resource adfAutoResolveIr 'Microsoft.DataFactory/factories/integrationRuntimes@2
   }
 }
 
-// ── Private DNS Zone ──────────────────────────────────────────────────────────
-
-resource adfDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' existing = {
-  name: 'privatelink.datafactory.azure.net'
-}
-
 // ── Private Endpoint ──────────────────────────────────────────────────────────
 
 resource adfPrivateEndpoint 'Microsoft.Network/privateEndpoints@2023-05-01' = {
@@ -104,7 +101,7 @@ resource adfDnsZoneGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroup
       {
         name: 'privatelink-datafactory-azure-net'
         properties: {
-          privateDnsZoneId: adfDnsZone.id
+          privateDnsZoneId: dataFactoryPrivateDnsZoneId
         }
       }
     ]
@@ -121,7 +118,10 @@ resource secureStorageBlobContributor 'Microsoft.Authorization/roleAssignments@2
   name: guid(secureStorageAccountId, dataFactory.id, storageBlobDataContributorRoleId)
   scope: secureStorageAccount
   properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', storageBlobDataContributorRoleId)
+    roleDefinitionId: subscriptionResourceId(
+      'Microsoft.Authorization/roleDefinitions',
+      storageBlobDataContributorRoleId
+    )
     principalId: dataFactory.identity.principalId
     principalType: 'ServicePrincipal'
   }

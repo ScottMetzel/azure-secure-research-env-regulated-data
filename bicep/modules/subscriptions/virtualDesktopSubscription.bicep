@@ -8,6 +8,23 @@ param location string = 'westus2'
 @maxLength(20)
 param environmentName string = 'Prod'
 
+@description('Local administrator username for VMs.')
+param adminUsername string
+
+@description('Local administrator password for VMs.')
+@secure()
+param adminPassword string
+
+@description('Options: Bastion or AVD. Determines whether to deploy Azure Bastion with a virtual machine or Azure Virtual Desktop for remote access to the environment. Default is AVD.')
+@allowed([
+  'Bastion'
+  'AVD'
+])
+param BastionOrAVD string = 'AVD'
+
+@description('The Resource ID of the Log Analytics Workspace to link for monitoring. This should be the workspace deployed in the hub subscription.')
+param logAnalyticsWorkspaceId string
+
 @description('Address prefix for the virtual network.')
 param vnetAddressPrefix string = '10.100.40.0/21'
 
@@ -31,21 +48,11 @@ param avdSubnetPrefix string = '10.100.42.0/24'
 @description('The private IP address of the Azure Firewall deployed in the hub, used as the next hop for forced tunneling from the Remote Desktop Server subnet.')
 param azureFirewallPrivateIp string
 
-@description('Local administrator username for VMs.')
-param adminUsername string
-
-@description('Local administrator password for VMs.')
-@secure()
-param adminPassword string
-
-@description('The Resource ID of the Log Analytics Workspace to link for monitoring. This should be the workspace deployed in the hub subscription.')
-param logAnalyticsWorkspaceId string
+@description('The string array of DNS servers to use on the Virtual Network.')
+param vNETDNSServers array
 
 @description('Tags applied to every resource.')
-param tags object = {
-  workloadName: 'SILO'
-  environment: environmentName
-}
+param tags object
 
 // ── Resource Groups ───────────────────────────────────────────────────────────
 
@@ -57,15 +64,22 @@ resource spokeVNETRG 'Microsoft.Resources/resourceGroups@2023-07-01' = {
 }
 
 @description('Bastion resource group — contains Azure Bastion and its public IP.')
-resource bastionRG 'Microsoft.Resources/resourceGroups@2023-07-01' = {
+resource bastionRG 'Microsoft.Resources/resourceGroups@2023-07-01' = if (BastionOrAVD == 'Bastion') {
   name: '${environmentName}-RG-Bastion-01'
   location: location
   tags: tags
 }
 
 @description('Remote Desktop Server VM resource group — contains the Remote Desktop Server VMs.')
-resource rdServerVMRG 'Microsoft.Resources/resourceGroups@2023-07-01' = {
+resource rdServerVMRG 'Microsoft.Resources/resourceGroups@2023-07-01' = if (BastionOrAVD == 'Bastion') {
   name: '${environmentName}-RG-RDServerVM-01'
+  location: location
+  tags: tags
+}
+
+@description('AVD resource group — contains Azure Virtual Desktop resources.')
+resource avdRG 'Microsoft.Resources/resourceGroups@2023-07-01' = if (BastionOrAVD == 'AVD') {
+  name: '${environmentName}-RG-AVD-01'
   location: location
   tags: tags
 }
@@ -77,7 +91,7 @@ module networkingVirtualDesktop '../network/networking_virtualDesktop.bicep' = {
   params: {
     location: location
     environmentName: environmentName
-    tags: tags
+    BastionOrAVD: BastionOrAVD
     vnetAddressPrefix: vnetAddressPrefix
     bastionSubnetPrefix: bastionSubnetPrefix
     webSubnetPrefix: webSubnetPrefix
@@ -87,14 +101,16 @@ module networkingVirtualDesktop '../network/networking_virtualDesktop.bicep' = {
     webVNETIntegrationSubnetPrefix: webVNETIntegrationSubnetPrefix
     rdServerSubnetPrefix: rdServerSubnetPrefix
     avdSubnetPrefix: avdSubnetPrefix
+    vNETDNSServers: vNETDNSServers
     azureFirewallPrivateIp: azureFirewallPrivateIp
+    tags: tags
   }
 }
 
-// ── Azure Bastion (bastion-rg; uses AzureBastionSubnet from hub VNet) ─────────
+// ── Azure Bastion (bastion-rg; uses AzureBastionSubnet) ─────────
 // Requirement: Bastion in a separate resource group from the hub VNet and VM.
 
-module bastion '../bastion/bastion.bicep' = {
+module bastion '../bastion/bastion.bicep' = if (BastionOrAVD == 'Bastion') {
   name: 'bastion'
   scope: bastionRG
   params: {
@@ -107,11 +123,11 @@ module bastion '../bastion/bastion.bicep' = {
   }
 }
 
-// ── Research VM (researchvm-rg; NIC in ResearchSubnet of hub VNet) ────────────
+// ── Research VM ────────────
 // Gen2 D4ds_v5 Windows Server 2025 Azure Edition VM — accessed via Azure Bastion.
 // Requirement: VM in a separate resource group from both the hub VNet and Bastion.
 
-module researchVm '../compute/researchvm.bicep' = {
+module researchVm '../compute/researchvm.bicep' = if (BastionOrAVD == 'Bastion') {
   name: 'researchVm'
   scope: rdServerVMRG
   params: {
@@ -119,6 +135,21 @@ module researchVm '../compute/researchvm.bicep' = {
     environmentName: environmentName
     tags: tags
     subnetId: networkingVirtualDesktop.outputs.RDServer01SubnetId
+    logAnalyticsWorkspaceId: logAnalyticsWorkspaceId
+    adminUsername: adminUsername
+    adminPassword: adminPassword
+  }
+}
+
+// ── AVD ────────────
+module avd '../avd/avd.bicep' = if (BastionOrAVD == 'AVD') {
+  name: 'avd'
+  scope: avdRG
+  params: {
+    location: location
+    environmentName: environmentName
+    tags: tags
+    subnetId: networkingVirtualDesktop.outputs.AVD01SubnetId
     logAnalyticsWorkspaceId: logAnalyticsWorkspaceId
     adminUsername: adminUsername
     adminPassword: adminPassword

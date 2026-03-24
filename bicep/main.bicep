@@ -11,7 +11,7 @@ param location string = 'westus2'
 param environmentName string = 'production'
 
 @description('Tag - Workload Name.')
-param workloadName string = 'SILO'
+param workloadName string = 'SRERD'
 
 @description('Tags applied to every resource.')
 param tags object = {
@@ -25,6 +25,13 @@ param adminUsername string
 @description('Local administrator password for VMs.')
 @secure()
 param adminPassword string
+
+@description('Options: Bastion or AVD. Determines whether to deploy Azure Bastion with a virtual machine or Azure Virtual Desktop for remote access to the environment. Default is AVD.')
+@allowed([
+  'Bastion'
+  'AVD'
+])
+param BastionOrAVD string = 'AVD'
 
 @description('Subscription ID where the research environment will be deployed. Used for cross-subscription resource deployments and role assignments.')
 @minLength(36)
@@ -52,6 +59,75 @@ param researcherVMCount int = 1
 @description('The email address of the data approver, who will receive notifications and approval requests when researchers attempt to upload data to the secure environment.')
 param dataApproverEmail string
 
+#disable-next-line no-hardcoded-env-urls
+param blobPrivateLinkZoneName string = 'privatelink.blob.core.windows.net'
+
+param privateDnsZoneNames array = [
+  'privatelink.vaultcore.azure.net'
+  'privatelink.datafactory.azure.net'
+  'privatelink.azureml.ms'
+]
+
+@description('Address prefix for the hub virtual network.')
+param hubVNETAddressPrefix string = '10.100.0.0/23'
+
+@description('Address prefix for the GatewaySubnet (minimum /28).')
+param gatewaySubnetPrefix string = '10.100.0.0/26'
+
+@description('Address prefix for AzureFirewallSubnet (minimum /26).')
+param firewallSubnetPrefix string = '10.100.0.64/26'
+
+@description('Address prefix for Azure DNS Private Resolver Inbound Subnet (minimum /28).')
+param azDNSPrivateResolverInboundSubnet string = '10.100.0.128/28'
+
+@description('Address prefix for Azure DNS Private Resolver Outbound Subnet (minimum /28).')
+param azDNSPrivateResolverOutboundSubnet string = '10.100.0.144/28'
+
+// ── Variables ───────────────────────────────────────────────────────────
+var privateDnsZoneNamesArray = concat([blobPrivateLinkZoneName], privateDnsZoneNames)
+
+var blobStoragePrivateDnsZoneId = resourceId(
+  hubSubscriptionID,
+  hubSubscription.outputs.privateDNSZonesRGName,
+  'Microsoft.Network/privateDnsZones',
+  blobPrivateLinkZoneName
+)
+
+var keyVaultPrivateDnsZoneId = resourceId(
+  hubSubscriptionID,
+  hubSubscription.outputs.privateDNSZonesRGName,
+  'Microsoft.Network/privateDnsZones',
+  'privatelink.vaultcore.azure.net'
+)
+
+var dataFactoryPrivateDnsZoneId = resourceId(
+  hubSubscriptionID,
+  hubSubscription.outputs.privateDNSZonesRGName,
+  'Microsoft.Network/privateDnsZones',
+  'privatelink.datafactory.azure.net'
+)
+
+var azureMLPrivateDnsZoneId = resourceId(
+  hubSubscriptionID,
+  hubSubscription.outputs.privateDNSZonesRGName,
+  'Microsoft.Network/privateDnsZones',
+  'privatelink.azureml.ms'
+)
+
+@description('Azure DNS Private Resolver Inbound Endpoint Static Private IP Address. Must be within the address range of the AzDNSPRInbound01 subnet defined in the hub virtual network.')
+var azDNSPRInboundStaticIPCIDR = cidrSubnet(azDNSPrivateResolverInboundSubnet, 32, 4)
+
+var azDNSPRInboundStaticIP = first(split(azDNSPRInboundStaticIPCIDR, '/'))
+
+@description('Azure Firewall Private IP Address. This is the 5th usable IP in the AzureFirewallSubnet.')
+var firewallPrivateIPCIDR = cidrSubnet(firewallSubnetPrefix, 32, 4)
+
+var firewallPrivateIP = first(split(firewallPrivateIPCIDR, '/'))
+
+var vNETDNSServers = [
+  firewallPrivateIP
+]
+
 // ── Subscription deployments ───────────────────────────────────────────────────────────
 
 @description('Hub Subscription - Contains the hub VNET and Azure Firewall.')
@@ -61,17 +137,27 @@ module hubSubscription 'modules/subscriptions/hubSubscription.bicep' = {
   params: {
     location: location
     environmentName: environmentName
+    privateDnsZoneNamesArray: privateDnsZoneNamesArray
+    vNETDNSServers: vNETDNSServers
+    hubVNETAddressPrefix: hubVNETAddressPrefix
+    gatewaySubnetPrefix: gatewaySubnetPrefix
+    firewallSubnetPrefix: firewallSubnetPrefix
+    azDNSPrivateResolverInboundSubnet: azDNSPrivateResolverInboundSubnet
+    azDNSPrivateResolverOutboundSubnet: azDNSPrivateResolverOutboundSubnet
+    azDNSPRInboundStaticIP: azDNSPRInboundStaticIP
     tags: tags
   }
 }
 
-@description('Virtual Desktop Subscription - Contains the Bastion and virtual desktop environment.')
+@description('Virtual Desktop Subscription - Contains the Bastion and VM or Azure Virtual Desktop environment.')
 module virtualDesktopSubscription 'modules/subscriptions/virtualDesktopSubscription.bicep' = {
   name: 'virtualDesktopSubscription'
   scope: subscription(virtualDesktopSubscriptionID)
   params: {
     location: location
     environmentName: environmentName
+    BastionOrAVD: BastionOrAVD
+    vNETDNSServers: vNETDNSServers
     adminUsername: adminUsername
     adminPassword: adminPassword
     logAnalyticsWorkspaceId: hubSubscription.outputs.logAnalyticsWorkspaceResourceId
@@ -87,7 +173,7 @@ module researcherSubscription 'modules/subscriptions/researcherSubscription.bice
   params: {
     location: location
     environmentName: environmentName
-    tags: tags
+    vNETDNSServers: vNETDNSServers
     adminUsername: adminUsername
     adminPassword: adminPassword
     researcherVMSize: researcherVMSize
@@ -95,6 +181,11 @@ module researcherSubscription 'modules/subscriptions/researcherSubscription.bice
     dataApproverEmail: dataApproverEmail
     logAnalyticsWorkspaceId: hubSubscription.outputs.logAnalyticsWorkspaceResourceId
     azureFirewallPrivateIp: hubSubscription.outputs.firewallPrivateIp
+    blobStoragePrivateDnsZoneId: blobStoragePrivateDnsZoneId
+    keyVaultPrivateDnsZoneId: keyVaultPrivateDnsZoneId
+    dataFactoryPrivateDnsZoneId: dataFactoryPrivateDnsZoneId
+    azureMLPrivateDnsZoneId: azureMLPrivateDnsZoneId
+    tags: tags
   }
 }
 

@@ -27,6 +27,9 @@ param tenantId string = tenant().tenantId
 @maxValue(90)
 param softDeleteRetentionInDays int = 7
 
+@description('The Resource ID of the Private DNS Zone to use for the Key Vault.')
+param keyVaultPrivateDnsZoneId string
+
 // ── Key Vault ─────────────────────────────────────────────────────────────────
 
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {

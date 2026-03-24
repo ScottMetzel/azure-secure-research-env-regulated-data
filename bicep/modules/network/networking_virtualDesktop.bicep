@@ -6,8 +6,12 @@ param location string
 @maxLength(20)
 param environmentName string
 
-@description('Tags to apply to all resources.')
-param tags object
+@description('Options: Bastion or AVD. Determines whether to deploy Azure Bastion with a virtual machine or Azure Virtual Desktop for remote access to the environment. Default is AVD.')
+@allowed([
+  'Bastion'
+  'AVD'
+])
+param BastionOrAVD string = 'AVD'
 
 @description('Address prefix for the virtual network.')
 param vnetAddressPrefix string = '10.100.40.0/21'
@@ -29,13 +33,22 @@ param rdServerSubnetPrefix string = '10.100.41.0/24'
 @description('Address prefix for the first Azure Virtual Desktop subnet.')
 param avdSubnetPrefix string = '10.100.42.0/24'
 
+@description('The string array of DNS servers to use on the Virtual Network.')
+param vNETDNSServers array
+
 @description('The private IP address of the Azure Firewall deployed in the hub, used as the next hop for forced tunneling from the Remote Desktop Server subnet.')
 param azureFirewallPrivateIp string
+
+@description('Tags to apply to all resources.')
+param tags object
+
+// ── Variables ───────────────────────────────────────────────────────────
+var desktopSubnetName = BastionOrAVD == 'Bastion' ? 'AzureBastionSubnet' : 'AVD01'
 
 // ── NSGs ──────────────────────────────────────────────────────────────────────
 // Azure Bastion requires specific inbound/outbound rules.
 // See: https://learn.microsoft.com/azure/bastion/bastion-nsg
-resource AzureBastionNSG 'Microsoft.Network/networkSecurityGroups@2023-05-01' = {
+resource AzureBastionNSG 'Microsoft.Network/networkSecurityGroups@2023-05-01' = if (BastionOrAVD == 'Bastion') {
   name: '${environmentName}-NSG-Bastion-01'
   location: location
   tags: tags
@@ -219,7 +232,7 @@ resource remoteDesktopVNETRouteTable 'Microsoft.Network/routeTables@2025-05-01' 
 
 // ── Virtual Network ───────────────────────────────────────────────────────────
 
-resource virtualDesktopSpokeVNET 'Microsoft.Network/virtualNetworks@2023-05-01' = {
+resource virtualDesktopSpokeVNET 'Microsoft.Network/virtualNetworks@2025-05-01' = {
   name: '${environmentName}-VNET-RemoteDesktop-01'
   location: location
   tags: tags
@@ -227,107 +240,108 @@ resource virtualDesktopSpokeVNET 'Microsoft.Network/virtualNetworks@2023-05-01' 
     addressSpace: {
       addressPrefixes: [vnetAddressPrefix]
     }
-    subnets: [
-      {
-        name: 'AzureBastionSubnet'
-        properties: {
-          addressPrefix: bastionSubnetPrefix
-          networkSecurityGroup: { id: AzureBastionNSG.id }
-          privateEndpointNetworkPolicies: 'Disabled'
-          privateLinkServiceNetworkPolicies: 'Enabled'
-          routeTable: {
-            id: remoteDesktopVNETRouteTable.id
-          }
-        }
+    dhcpOptions: {
+      dnsServers: vNETDNSServers
+    }
+  }
+
+  resource AzureBastionSubnet 'subnets' = if (BastionOrAVD == 'AVD') {
+    name: 'AzureBastionSubnet'
+    properties: {
+      addressPrefix: bastionSubnetPrefix
+      networkSecurityGroup: { id: AzureBastionNSG.id }
+      privateEndpointNetworkPolicies: 'Disabled'
+      privateLinkServiceNetworkPolicies: 'Enabled'
+      routeTable: {
+        id: remoteDesktopVNETRouteTable.id
       }
-      {
-        name: 'Web01'
-        properties: {
-          addressPrefix: webSubnetPrefix
-          networkSecurityGroup: { id: RemoteDesktopNSG.id }
-          privateEndpointNetworkPolicies: 'Enabled'
-          privateLinkServiceNetworkPolicies: 'Enabled'
-          routeTable: {
-            id: remoteDesktopVNETRouteTable.id
-          }
-        }
+    }
+  }
+  resource WebSubnet 'subnets' = {
+    name: 'Web01'
+    properties: {
+      addressPrefix: webSubnetPrefix
+      networkSecurityGroup: { id: RemoteDesktopNSG.id }
+      privateEndpointNetworkPolicies: 'Enabled'
+      privateLinkServiceNetworkPolicies: 'Enabled'
+      routeTable: {
+        id: remoteDesktopVNETRouteTable.id
       }
-      {
-        name: 'App01'
-        properties: {
-          addressPrefix: appSubnetPrefix
-          networkSecurityGroup: { id: RemoteDesktopNSG.id }
-          privateEndpointNetworkPolicies: 'Enabled'
-          privateLinkServiceNetworkPolicies: 'Enabled'
-          routeTable: {
-            id: remoteDesktopVNETRouteTable.id
-          }
-        }
+    }
+  }
+  resource AppSubnet 'subnets' = {
+    name: 'App01'
+    properties: {
+      addressPrefix: appSubnetPrefix
+      networkSecurityGroup: { id: RemoteDesktopNSG.id }
+      privateEndpointNetworkPolicies: 'Enabled'
+      privateLinkServiceNetworkPolicies: 'Enabled'
+      routeTable: {
+        id: remoteDesktopVNETRouteTable.id
       }
-      {
-        name: 'DB01'
-        properties: {
-          addressPrefix: dbSubnetPrefix
-          networkSecurityGroup: { id: RemoteDesktopNSG.id }
-          privateEndpointNetworkPolicies: 'Enabled'
-          privateLinkServiceNetworkPolicies: 'Enabled'
-          routeTable: {
-            id: remoteDesktopVNETRouteTable.id
-          }
-        }
+    }
+  }
+  resource DBSubnet 'subnets' = {
+    name: 'DB01'
+    properties: {
+      addressPrefix: dbSubnetPrefix
+      networkSecurityGroup: { id: RemoteDesktopNSG.id }
+      privateEndpointNetworkPolicies: 'Enabled'
+      privateLinkServiceNetworkPolicies: 'Enabled'
+      routeTable: {
+        id: remoteDesktopVNETRouteTable.id
       }
-      {
-        name: 'Storage01'
-        properties: {
-          addressPrefix: storageSubnetPrefix
-          networkSecurityGroup: { id: RemoteDesktopNSG.id }
-          privateEndpointNetworkPolicies: 'Enabled'
-          privateLinkServiceNetworkPolicies: 'Enabled'
-          routeTable: {
-            id: remoteDesktopVNETRouteTable.id
-          }
-        }
+    }
+  }
+  resource StorageSubnet 'subnets' = {
+    name: 'Storage01'
+    properties: {
+      addressPrefix: storageSubnetPrefix
+      networkSecurityGroup: { id: RemoteDesktopNSG.id }
+      privateEndpointNetworkPolicies: 'Enabled'
+      privateLinkServiceNetworkPolicies: 'Enabled'
+      routeTable: {
+        id: remoteDesktopVNETRouteTable.id
       }
-      {
-        name: 'WebVNETIntegration01'
-        properties: {
-          addressPrefix: webVNETIntegrationSubnetPrefix
-          networkSecurityGroup: { id: RemoteDesktopNSG.id }
-          privateEndpointNetworkPolicies: 'Disabled'
-          privateLinkServiceNetworkPolicies: 'Enabled'
-          routeTable: {
-            id: remoteDesktopVNETRouteTable.id
-          }
-        }
+    }
+  }
+  resource WebVNETIntegrationSubnet 'subnets' = {
+    name: 'WebVNETIntegration01'
+    properties: {
+      addressPrefix: webVNETIntegrationSubnetPrefix
+      networkSecurityGroup: { id: RemoteDesktopNSG.id }
+      privateEndpointNetworkPolicies: 'Disabled'
+      privateLinkServiceNetworkPolicies: 'Enabled'
+      routeTable: {
+        id: remoteDesktopVNETRouteTable.id
       }
-      {
-        name: 'RDServer01'
-        properties: {
-          addressPrefix: rdServerSubnetPrefix
-          networkSecurityGroup: { id: RemoteDesktopNSG.id }
-          privateEndpointNetworkPolicies: 'Disabled'
-          privateLinkServiceNetworkPolicies: 'Enabled'
-          routeTable: {
-            id: remoteDesktopVNETRouteTable.id
-          }
-        }
+    }
+  }
+  resource RDServerSubnet 'subnets' = if (BastionOrAVD == 'AVD') {
+    name: 'RDServer01'
+    properties: {
+      addressPrefix: rdServerSubnetPrefix
+      networkSecurityGroup: { id: RemoteDesktopNSG.id }
+      privateEndpointNetworkPolicies: 'Disabled'
+      privateLinkServiceNetworkPolicies: 'Enabled'
+      routeTable: {
+        id: remoteDesktopVNETRouteTable.id
       }
-      {
-        name: 'AVD01'
-        properties: {
-          addressPrefix: avdSubnetPrefix
-          networkSecurityGroup: { id: RemoteDesktopNSG.id }
-          privateEndpointNetworkPolicies: 'Disabled'
-          privateLinkServiceNetworkPolicies: 'Enabled'
-          routeTable: {
-            id: remoteDesktopVNETRouteTable.id
-          }
-        }
+    }
+  }
+  resource AVDSubnet 'subnets' = if (BastionOrAVD == 'AVD') {
+    name: 'AVD01'
+    properties: {
+      addressPrefix: avdSubnetPrefix
+      networkSecurityGroup: { id: RemoteDesktopNSG.id }
+      privateEndpointNetworkPolicies: 'Disabled'
+      privateLinkServiceNetworkPolicies: 'Enabled'
+      routeTable: {
+        id: remoteDesktopVNETRouteTable.id
       }
-    ]
+    }
   }
 }
-
 // ── Outputs ───────────────────────────────────────────────────────────────────
 
 @description('The resource ID of the virtual network.')

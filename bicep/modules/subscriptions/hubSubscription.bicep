@@ -9,14 +9,33 @@ param location string = 'westus2'
 param environmentName string = 'Prod'
 
 @description('Tags applied to every resource.')
-param tags object = {
-  workloadName: 'SILO'
-  environment: environmentName
-}
+param tags object
+
+@description('Address prefix for the hub virtual network.')
+param hubVNETAddressPrefix string = '10.100.0.0/23'
+
+@description('Address prefix for the GatewaySubnet (minimum /28).')
+param gatewaySubnetPrefix string = '10.100.0.0/26'
+
+@description('Address prefix for AzureFirewallSubnet (minimum /26).')
+param firewallSubnetPrefix string = '10.100.0.64/26'
+
+@description('Address prefix for Azure DNS Private Resolver Inbound Subnet (minimum /28).')
+param azDNSPrivateResolverInboundSubnet string = '10.100.0.128/28'
+
+@description('Address prefix for Azure DNS Private Resolver Outbound Subnet (minimum /28).')
+param azDNSPrivateResolverOutboundSubnet string = '10.100.0.144/28'
 
 @description('Azure DNS Private Resolver Inbound Endpoint Static Private IP Address. Must be within the address range of the AzDNSPRInbound01 subnet defined in the hub virtual network.')
-param azDNSPRInboundStaticIP string = '10.100.0.68'
+param azDNSPRInboundStaticIP string
 
+param privateDnsZoneNamesArray array
+
+@description('The string array of DNS servers to use on the Virtual Network.')
+param vNETDNSServers array
+
+// ── Variables ───────────────────────────────────────────────────────────
+var firewallPolicyDNSServers = array(azDNSPRInboundStaticIP)
 // ── Resource Groups ───────────────────────────────────────────────────────────
 @description('Hub VNET resource group — contains the hub Virtual Network and Firewall.')
 resource hubVNETRG 'Microsoft.Resources/resourceGroups@2023-07-01' = {
@@ -53,6 +72,12 @@ module hubVNET '../network/networking_hub.bicep' = {
   params: {
     location: location
     environmentName: environmentName
+    vNETDNSServers: vNETDNSServers
+    hubVNETAddressPrefix: hubVNETAddressPrefix
+    gatewaySubnetPrefix: gatewaySubnetPrefix
+    firewallSubnetPrefix: firewallSubnetPrefix
+    azDNSPrivateResolverInboundSubnet: azDNSPrivateResolverInboundSubnet
+    azDNSPrivateResolverOutboundSubnet: azDNSPrivateResolverOutboundSubnet
     tags: tags
   }
 }
@@ -65,19 +90,6 @@ module logAnalytics '../monitoring/logAnalytics.bicep' = {
     environmentName: environmentName
     workspaceName: '${environmentName}-LAW-SOC-01'
     tags: tags
-  }
-}
-
-@description('Azure Firewall Policy and Firewall')
-module firewallandPolicy '../network/firewall.bicep' = {
-  name: 'hubFirewall'
-  scope: resourceGroup(hubVNETRG.name)
-  params: {
-    location: location
-    environmentName: environmentName
-    tags: tags
-    firewallSubnetId: hubVNET.outputs.firewallSubnetId
-    logAnalyticsWorkspaceId: logAnalytics.outputs.workspaceResourceId
   }
 }
 
@@ -94,17 +106,31 @@ module privateDNSResolver '../network/privateDNSResolver.bicep' = {
   }
 }
 
+@description('Azure Firewall Policy and Firewall')
+module firewallandPolicy '../network/firewall.bicep' = {
+  name: 'hubFirewall'
+  scope: resourceGroup(hubVNETRG.name)
+  params: {
+    location: location
+    environmentName: environmentName
+    tags: tags
+    firewallSubnetId: hubVNET.outputs.firewallSubnetId
+    logAnalyticsWorkspaceId: logAnalytics.outputs.workspaceResourceId
+    dnsServers: firewallPolicyDNSServers
+  }
+}
+
 // ── Hub VNet DNS Zone Links (network-rg, where DNS zones live) ────────────────
 // Creates additional VNet links so the research VM in the hub can resolve
 // private endpoint DNS names (storage, Key Vault, ADF, etc.).
-
-module hubDnsZoneLinks '../network/privateDNSZones.bicep' = {
-  name: 'hubDnsZoneLinks'
+module hubPrivateDnsZonesAndLinks '../network/privateDNSZonesAndLinks.bicep' = {
+  name: 'hubPrivateDnsZonesAndLinks'
   scope: resourceGroup(privateDNSZonesRG.name)
   params: {
-    environmentName: environmentName
-    tags: tags
+    location: location
     vnetId: hubVNET.outputs.VNETid
+    privateDnsZoneNamesArray: privateDnsZoneNamesArray
+    tags: tags
   }
 }
 
@@ -123,6 +149,12 @@ output privateDNSResolverId string = privateDNSResolver.outputs.privateDNSResolv
 
 @description('The name of the Azure Private DNS Resolver.')
 output privateDNSResolverName string = privateDNSResolver.outputs.privateDNSResolverName
+
+@description('The name of the resource group containing the Azure Private DNS Zones linked to the hub VNET.')
+output privateDNSZonesRGName string = privateDNSZonesRG.name
+
+@description('The array of Azure Private DNS Zone RResource IDs linked to the hub VNET.')
+output privateDNSZoneIds array = hubPrivateDnsZonesAndLinks.outputs.privateDnsZoneIds
 
 @description('The resource ID of the Log Analytics Workspace.')
 output logAnalyticsWorkspaceResourceId string = logAnalytics.outputs.workspaceResourceId
