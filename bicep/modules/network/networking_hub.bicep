@@ -1,13 +1,10 @@
 @description('Azure region for all hub network resources.')
-param location string
+param location string = 'westus2'
 
 @description('Environment name used as a prefix for resource names.')
 @minLength(1)
 @maxLength(20)
-param environmentName string
-
-@description('Tags to apply to all resources.')
-param tags object
+param environmentName string = 'Dev'
 
 @description('Address prefix for the hub virtual network.')
 param hubVNETAddressPrefix string = '10.100.0.0/23'
@@ -25,7 +22,15 @@ param azDNSPrivateResolverInboundSubnet string = '10.100.0.128/28'
 param azDNSPrivateResolverOutboundSubnet string = '10.100.0.144/28'
 
 @description('The string array of DNS servers to use on the Virtual Network.')
-param vNETDNSServers array
+param vNETDNSServers array = [
+  '168.63.129.16' // Example: IP address of an internal DNS forwarder or resolver in the hub VNet. This should be updated to the actual DNS server(s) used in the environment for name resolution.
+]
+
+@description('Tags to apply to all resources.')
+param tags object = {
+  workloadName: 'SRERD'
+  environment: 'Dev'
+}
 
 // ── Hub Virtual Network ───────────────────────────────────────────────────────
 // AzureFirewallSubnet and AzureBastionSubnet are reserved names required by Azure.

@@ -1,13 +1,10 @@
 @description('Azure region for all network resources.')
-param location string
+param location string = 'westus2'
 
 @description('Environment name used as a prefix for resource names.')
 @minLength(1)
 @maxLength(20)
-param environmentName string
-
-@description('Tags to apply to all resources.')
-param tags object
+param environmentName string = 'Dev'
 
 @description('Address prefix for the virtual network.')
 param vnetAddressPrefix string = '10.100.60.0/21'
@@ -19,18 +16,26 @@ param dbSubnetPrefix string = '10.100.60.128/27'
 @description('Address prefix for the storage subnet, used with Azure Storage Accounts and FSLogix.')
 param storageSubnetPrefix string = '10.100.60.160/27'
 
-param KeyVault01SubnetPrefix string = ''
+param KeyVault01SubnetPrefix string = '10.100.60.192/27'
 
-param webVNETIntegrationSubnetPrefix string = '10.100.60.192/27'
+param webVNETIntegrationSubnetPrefix string = '10.100.60.224/27'
 
 @description('Address prefix for the first Data Science Server subnet.')
 param researcherServerSubnetPrefix string = '10.100.61.0/28'
 
 @description('The string array of DNS servers to use on the Virtual Network.')
-param vNETDNSServers array
+param vNETDNSServers array = [
+  '168.63.129.16' // Example: IP address of an internal DNS forwarder or resolver in the hub VNet. This should be updated to the actual DNS server(s) used in the environment for name resolution.
+]
 
 @description('The private IP address of the Azure Firewall deployed in the hub, used as the next hop for forced tunneling from the Remote Desktop Server subnet.')
-param azureFirewallPrivateIp string
+param azureFirewallPrivateIp string = '10.100.0.4'
+
+@description('Tags to apply to all resources.')
+param tags object = {
+  workloadName: 'SRERD'
+  environment: 'Dev'
+}
 
 // ── NSGs ──────────────────────────────────────────────────────────────────────
 

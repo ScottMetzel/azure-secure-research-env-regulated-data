@@ -8,9 +8,6 @@ param location string = 'westus2'
 @maxLength(20)
 param environmentName string = 'Prod'
 
-@description('Tags applied to every resource.')
-param tags object
-
 @description('Address prefix for the hub virtual network.')
 param hubVNETAddressPrefix string = '10.100.0.0/23'
 
@@ -27,12 +24,24 @@ param azDNSPrivateResolverInboundSubnet string = '10.100.0.128/28'
 param azDNSPrivateResolverOutboundSubnet string = '10.100.0.144/28'
 
 @description('Azure DNS Private Resolver Inbound Endpoint Static Private IP Address. Must be within the address range of the AzDNSPRInbound01 subnet defined in the hub virtual network.')
-param azDNSPRInboundStaticIP string
+param azDNSPRInboundStaticIP string = '10.10.10.10'
 
-param privateDnsZoneNamesArray array
+param privateDnsZoneNamesArray array = [
+  'privatelink.vaultcore.azure.net'
+  'privatelink.datafactory.azure.net'
+  'privatelink.azureml.ms'
+]
 
 @description('The string array of DNS servers to use on the Virtual Network.')
-param vNETDNSServers array
+param vNETDNSServers array = [
+  '168.63.129.16'
+]
+
+@description('Tags applied to every resource.')
+param tags object = {
+  WorkloadName: 'SRERD'
+  Environment: 'Dev'
+}
 
 // ── Variables ───────────────────────────────────────────────────────────
 var firewallPolicyDNSServers = array(azDNSPRInboundStaticIP)

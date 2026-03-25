@@ -24,14 +24,14 @@ param webVNETIntegrationSubnetPrefix string = '10.100.60.192/27'
 param researcherServerSubnetPrefix string = '10.100.61.0/28'
 
 @description('The private IP address of the Azure Firewall deployed in the hub, used as the next hop for forced tunneling from the Remote Desktop Server subnet.')
-param azureFirewallPrivateIp string
+param azureFirewallPrivateIp string = ''
 
 @description('Local administrator username for VMs.')
-param adminUsername string
+param adminUsername string = ''
 
 @description('Local administrator password for VMs.')
 @secure()
-param adminPassword string
+param adminPassword string = ''
 
 @description('VM size for Data Science VMs.')
 param researcherVMSize string = 'Standard_D8s_v5'
@@ -42,28 +42,31 @@ param researcherVMSize string = 'Standard_D8s_v5'
 param researcherVMCount int = 1
 
 @description('The email address of the data approver, who will receive notifications and approval requests when researchers attempt to upload data to the secure environment.')
-param dataApproverEmail string
+param dataApproverEmail string = ''
 
 @description('The Resource ID of the Log Analytics Workspace to link for monitoring. This should be the workspace deployed in the hub subscription.')
-param logAnalyticsWorkspaceId string
+param logAnalyticsWorkspaceId string = ''
 
 @description('Resource ID of the Azure Blob Storage Private DNS Zone.')
-param blobStoragePrivateDnsZoneId string
+param blobStoragePrivateDnsZoneId string = ''
 
 @description('Resource ID of the Key Vault Private DNS Zone.')
-param keyVaultPrivateDnsZoneId string
+param keyVaultPrivateDnsZoneId string = ''
 
 @description('Resource ID of the Data Factory Private DNS Zone.')
-param dataFactoryPrivateDnsZoneId string
+param dataFactoryPrivateDnsZoneId string = ''
 
 @description('Resource ID of the Azure ML Private DNS Zone.')
-param azureMLPrivateDnsZoneId string
+param azureMLPrivateDnsZoneId string = ''
 
 @description('The string array of DNS servers to use on the Virtual Network.')
-param vNETDNSServers array
+param vNETDNSServers array = []
 
 @description('Tags applied to every resource.')
-param tags object
+param tags object = {
+  workloadName: 'SRERD'
+  environment: 'Dev'
+}
 
 // ── Resource Groups ───────────────────────────────────────────────────────────
 @description('Data owner/approver resource group — contains the publicly-accessible data ingestion storage account, Logic App, and Fabric Data Factory resources.')

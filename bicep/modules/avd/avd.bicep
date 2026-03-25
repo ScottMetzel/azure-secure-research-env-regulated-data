@@ -1,19 +1,16 @@
 @description('Azure region for AVD resources.')
-param location string
+param location string = 'westus2'
 
 @description('Environment name used as a prefix for resource names.')
 @minLength(1)
 @maxLength(20)
-param environmentName string
-
-@description('Tags to apply to all resources.')
-param tags object
+param environmentName string = 'Prod'
 
 @description('Resource ID of the subnet for session host NICs.')
-param subnetId string
+param subnetId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/Dev-RG-Network-01/providers/Microsoft.Network/virtualNetworks/Dev-VNET-AVD-01/subnets/Dev-Subnet-AVD-SessionHosts'
 
 @description('Resource ID of the Log Analytics workspace for diagnostics.')
-param logAnalyticsWorkspaceId string
+param logAnalyticsWorkspaceId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/prod-rg-SOC-01/providers/microsoft.operationalinsights/workspaces/prod-law-soc-01'
 
 @description('VM size for AVD session hosts.')
 param vmSize string = 'Standard_D4s_v5'
@@ -24,11 +21,11 @@ param vmSize string = 'Standard_D4s_v5'
 param vmCount int = 2
 
 @description('Local administrator username for session host VMs.')
-param adminUsername string
+param adminUsername string = 'azureuser'
 
 @description('Local administrator password for session host VMs.')
 @secure()
-param adminPassword string
+param adminPassword string = ''
 
 @description('Active Directory domain to join. Leave empty when using AAD join. Used to configure the domain join extension (not deployed when aadJoin is true).')
 #disable-next-line no-unused-params
@@ -40,6 +37,11 @@ param aadJoin bool = true
 @description('UTC timestamp used to set host pool registration token expiry. Must be a future time. Defaults to 8 hours from deployment time.')
 param registrationTokenExpiry string = dateTimeAdd(utcNow(), 'PT8H')
 
+@description('Tags to apply to all resources.')
+param tags object = {
+  workloadName: 'SRERD'
+  environment: 'Prod'
+}
 // ── AVD Host Pool ─────────────────────────────────────────────────────────────
 
 resource hostPool 'Microsoft.DesktopVirtualization/hostPools@2023-09-05' = {

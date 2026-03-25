@@ -3,17 +3,17 @@
 // Deploy one instance per role assignment, scoped to the target resource's resource group.
 
 @description('The principal ID (object ID) to assign the role to.')
-param principalId string
+param principalId string = '00000000-0000-0000-0000-000000000000' // <-- REPLACE-ME
 
 @description('The built-in role definition ID (GUID only, without subscription path).')
-param roleDefinitionId string
+param roleDefinitionId string = '00000000-0000-0000-0000-000000000000' // <-- REPLACE-ME
 
 @description('Type of the principal: ServicePrincipal, User, or Group.')
 @allowed(['ServicePrincipal', 'User', 'Group'])
 param principalType string = 'ServicePrincipal'
 
 @description('A stable seed string used to generate a deterministic role assignment GUID.')
-param seed string
+param seed string = 'default-seed'
 
 // ── Role Assignment ───────────────────────────────────────────────────────────
 

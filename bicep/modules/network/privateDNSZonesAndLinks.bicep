@@ -2,12 +2,15 @@
 param location string = 'westus2'
 
 @description('Resource ID of the Virtual Network to link the private DNS zones to.')
-param vnetId string
+param vnetId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/Dev-RG-Network-01/providers/Microsoft.Network/virtualNetworks/Dev-VNET-Hub-01'
 
 param privateDnsZoneNamesArray array
 
 @description('Tags to apply to all resources.')
-param tags object
+param tags object = {
+  workloadName: 'SRERD'
+  environment: 'Dev'
+}
 
 // ── Variables ─────────────────────────────────────────────────────────
 var hubVNETName string = last(split(vnetId, '/'))

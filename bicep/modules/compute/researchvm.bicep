@@ -1,33 +1,36 @@
 @description('Azure region for the research VM.')
-param location string
+param location string = 'westus2'
 
 @description('Environment name used as a prefix for resource names.')
 @minLength(1)
 @maxLength(20)
-param environmentName string
-
-@description('Tags to apply to all resources.')
-param tags object
+param environmentName string = 'Dev'
 
 @description('Resource ID of the subnet for the VM NIC (ResearchSubnet in the hub VNet).')
-param subnetId string
+param subnetId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/Dev-RG-Network-01/providers/Microsoft.Network/virtualNetworks/Dev-VNET-Hub-01/subnets/Dev-Subnet-Research'
 
 @description('Resource ID of the Log Analytics workspace. Used to associate the Azure Monitor Agent extension.')
-param logAnalyticsWorkspaceId string
+param logAnalyticsWorkspaceId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/prod-rg-SOC-01/providers/microsoft.operationalinsights/workspaces/prod-law-soc-01'
 
 @description('VM size. Must be a Generation 2-capable, General Purpose size.')
 param vmSize string = 'Standard_D4ds_v5'
 
 @description('Local administrator username.')
-param adminUsername string
+param adminUsername string = 'azureuser'
 
 @description('Local administrator password.')
 @secure()
-param adminPassword string
+param adminPassword string = ''
+
+@description('Tags to apply to all resources.')
+param tags object = {
+  workloadName: 'SRERD'
+  environment: 'Dev'
+}
 
 // ── NIC (no public IP) ────────────────────────────────────────────────────────
 
-resource researchVmNic 'Microsoft.Network/networkInterfaces@2023-05-01' = {
+resource researchVmNic 'Microsoft.Network/networkInterfaces@2025-05-01' = {
   name: '${environmentName}-research-nic'
   location: location
   tags: tags
@@ -49,7 +52,7 @@ resource researchVmNic 'Microsoft.Network/networkInterfaces@2023-05-01' = {
 // Generation 2 VM running Windows Server 2025 Azure Edition.
 // Access is via Azure Bastion only — no public IP is attached.
 
-resource researchVm 'Microsoft.Compute/virtualMachines@2023-07-01' = {
+resource researchVm 'Microsoft.Compute/virtualMachines@2025-04-01' = {
   name: '${environmentName}-research-vm'
   location: location
   tags: tags
@@ -107,18 +110,15 @@ resource researchVm 'Microsoft.Compute/virtualMachines@2023-07-01' = {
 
 // ── AAD Login Extension ───────────────────────────────────────────────────────
 
-resource aadLoginExtension 'Microsoft.Compute/virtualMachines/extensions@2023-07-01' = {
+resource aadLoginExtension 'Microsoft.Compute/virtualMachines/extensions@2015-06-15' = {
   name: 'AADLoginForWindows'
   parent: researchVm
   location: location
   properties: {
     publisher: 'Microsoft.Azure.ActiveDirectory'
     type: 'AADLoginForWindows'
-    typeHandlerVersion: '2.0'
+    typeHandlerVersion: '1.0'
     autoUpgradeMinorVersion: true
-    settings: {
-      mdmId: ''
-    }
   }
 }
 
@@ -128,6 +128,7 @@ resource amaExtension 'Microsoft.Compute/virtualMachines/extensions@2023-07-01' 
   name: 'AzureMonitorWindowsAgent'
   parent: researchVm
   location: location
+  dependsOn: [aadLoginExtension]
   properties: {
     publisher: 'Microsoft.Azure.Monitor'
     type: 'AzureMonitorWindowsAgent'
@@ -135,7 +136,6 @@ resource amaExtension 'Microsoft.Compute/virtualMachines/extensions@2023-07-01' 
     autoUpgradeMinorVersion: true
     enableAutomaticUpgrade: true
   }
-  dependsOn: [aadLoginExtension]
 }
 
 // ── Outputs ───────────────────────────────────────────────────────────────────

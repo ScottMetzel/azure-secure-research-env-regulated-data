@@ -1,19 +1,22 @@
 @description('Azure region for all hub network resources.')
-param location string
+param location string = 'westus2'
 
 @description('Environment name used as a prefix for resource names.')
 @minLength(1)
 @maxLength(20)
-param environmentName string
+param environmentName string = 'Dev'
 
 @description('Subnet ID for the Azure Private DNS Resolver Inbound Endpoint.')
-param azDNSPRInboundSubnetId string
+param azDNSPRInboundSubnetId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/Dev-RG-Network-01/providers/Microsoft.Network/virtualNetworks/Dev-VNET-Hub-01/subnets/AzDNSPRInbound01'
 
 @description('Azure DNS Private Resolver Inbound Endpoint Static Private IP Address. Must be within the address range of the AzDNSPRInbound01 subnet defined in the hub virtual network.')
-param azDNSPRInboundStaticIP string
+param azDNSPRInboundStaticIP string = '10.100.1.42'
 
 @description('Tags to apply to all resources.')
-param tags object
+param tags object = {
+  workloadName: 'SRERD'
+  environment: 'Dev'
+}
 
 // ── Resources ─────────────────────────────────────────────────────────
 @description('Azure Private DNS Resolver')

@@ -1,31 +1,33 @@
 @description('Azure region for the secure storage account.')
-param location string
+param location string = 'westus2'
 
 @description('Environment name used as a prefix for resource names.')
 @minLength(1)
 @maxLength(20)
-param environmentName string
-
-@description('Tags to apply to all resources.')
-param tags object
+param environmentName string = 'Dev'
 
 @description('Resource ID of the subnet where the private endpoint will be placed.')
-param subnetId string
+param subnetId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/Dev-RG-Network-01/providers/Microsoft.Network/virtualNetworks/Dev-VNET-Hub-01/subnets/Dev-Subnet-Security-01'
 
 @description('Resource ID of the VNet. Reserved for future use (e.g. additional DNS zone links).')
 #disable-next-line no-unused-params
-param vnetId string
+param vnetId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/Dev-RG-Network-01/providers/Microsoft.Network/virtualNetworks/Dev-VNET-Hub-01'
 
 @description('Resource ID of the Log Analytics workspace for diagnostics.')
-param logAnalyticsWorkspaceId string
+param logAnalyticsWorkspaceId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/prod-rg-SOC-01/providers/microsoft.operationalinsights/workspaces/prod-law-soc-01'
 
 @description('Optional resource ID of a Key Vault for customer-managed keys. Leave empty to use Microsoft-managed keys.')
 #disable-next-line no-unused-params
-param keyVaultId string = ''
+param keyVaultId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/Dev-RG-Security-01/providers/Microsoft.KeyVault/vaults/dev-kv-01'
 
 @description('Resource ID of the Azure Blob Storage Private DNS Zone.')
-param blobStoragePrivateDnsZoneId string
+param blobStoragePrivateDnsZoneId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/Dev-RG-Network-01/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.windows.net'
 
+@description('Tags to apply to all resources.')
+param tags object = {
+  workloadName: 'SRERD'
+  environment: 'Dev'
+}
 // ── Storage Account ───────────────────────────────────────────────────────────
 
 var storageAccountName = toLower(take(

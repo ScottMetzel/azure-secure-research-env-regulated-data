@@ -1,23 +1,20 @@
 @description('Azure region for the Key Vault.')
-param location string
+param location string = 'westus2'
 
 @description('Environment name used as a prefix for resource names.')
 @minLength(1)
 @maxLength(20)
-param environmentName string
-
-@description('Tags to apply to all resources.')
-param tags object
+param environmentName string = 'Dev'
 
 @description('Resource ID of the subnet where the private endpoint will be placed.')
-param subnetId string
+param subnetId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/Dev-RG-Network-01/providers/Microsoft.Network/virtualNetworks/Dev-VNET-Hub-01/subnets/Dev-Subnet-KV'
 
 @description('Resource ID of the VNet. Reserved for future use (e.g. additional DNS zone links or peering checks).')
 #disable-next-line no-unused-params
-param vnetId string
+param vnetId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/Dev-RG-Network-01/providers/Microsoft.Network/virtualNetworks/Dev-VNET-Hub-01'
 
 @description('Resource ID of the Log Analytics workspace for diagnostics.')
-param logAnalyticsWorkspaceId string
+param logAnalyticsWorkspaceId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/prod-rg-SOC-01/providers/microsoft.operationalinsights/workspaces/prod-law-soc-01'
 
 @description('Azure AD tenant ID.')
 param tenantId string = tenant().tenantId
@@ -28,7 +25,13 @@ param tenantId string = tenant().tenantId
 param softDeleteRetentionInDays int = 7
 
 @description('The Resource ID of the Private DNS Zone to use for the Key Vault.')
-param keyVaultPrivateDnsZoneId string
+param keyVaultPrivateDnsZoneId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/Dev-RG-Network-01/providers/Microsoft.Network/privateDnsZones/privatelink.vaultcore.azure.net'
+
+@description('Tags to apply to all resources.')
+param tags object = {
+  workloadName: 'SRERD'
+  environment: 'Dev'
+}
 
 // ── Key Vault ─────────────────────────────────────────────────────────────────
 

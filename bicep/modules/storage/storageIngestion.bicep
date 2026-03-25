@@ -1,21 +1,26 @@
 @description('Azure region for the ingestion storage account.')
-param location string
+param location string = 'westus2'
 
 @description('Environment name used as a prefix for resource names.')
 @minLength(1)
 @maxLength(20)
-param environmentName string
-
-@description('Tags to apply to all resources.')
-param tags object
+param environmentName string = 'Dev'
 
 @description('Resource ID of the Log Analytics workspace for diagnostics.')
-param logAnalyticsWorkspaceId string
+param logAnalyticsWorkspaceId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/prod-rg-SOC-01/providers/microsoft.operationalinsights/workspaces/prod-law-soc-01'
 
+@description('Tags to apply to all resources.')
+param tags object = {
+  workloadName: 'SRERD'
+  environment: 'Dev'
+}
 // ── Storage Account ───────────────────────────────────────────────────────────
 
 // Storage account names must be globally unique, 3-24 lowercase alphanumeric characters.
-var storageAccountName = toLower(take('${replace(environmentName, '-', '')}ingest${uniqueString(resourceGroup().id)}', 24))
+var storageAccountName = toLower(take(
+  '${replace(environmentName, '-', '')}ingest${uniqueString(resourceGroup().id)}',
+  24
+))
 
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {
   name: storageAccountName

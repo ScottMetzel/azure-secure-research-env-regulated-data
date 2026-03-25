@@ -4,13 +4,13 @@
 // a bidirectional peering.
 
 @description('Name of the local virtual network that will own this peering.')
-param localVnetName string
+param localVnetName string = 'hub-vnet'
 
 @description('Name of the remote virtual network to peer with.')
-param remoteVnetName string
+param remoteVnetName string = 'remote-desktop-spoke-vnet'
 
 @description('Resource ID of the remote virtual network to peer with.')
-param remoteVnetId string
+param remoteVnetId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/Dev-RG-Network-01/providers/Microsoft.Network/virtualNetworks/Dev-VNET-RemoteDesktop-01'
 
 @description('Allow forwarded traffic through the peering.')
 param allowForwardedTraffic bool = true

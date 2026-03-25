@@ -1,10 +1,10 @@
 @description('Azure region for all network resources.')
-param location string
+param location string = 'westus2'
 
 @description('Environment name used as a prefix for resource names.')
 @minLength(1)
 @maxLength(20)
-param environmentName string
+param environmentName string = 'Dev'
 
 @description('Options: Bastion or AVD. Determines whether to deploy Azure Bastion with a virtual machine or Azure Virtual Desktop for remote access to the environment. Default is AVD.')
 @allowed([
@@ -34,16 +34,18 @@ param rdServerSubnetPrefix string = '10.100.41.0/24'
 param avdSubnetPrefix string = '10.100.42.0/24'
 
 @description('The string array of DNS servers to use on the Virtual Network.')
-param vNETDNSServers array
+param vNETDNSServers array = [
+  '168.63.129.16' // Example: IP address of an internal DNS forwarder or resolver in the hub VNet. This should be updated to the actual DNS server(s) used in the environment for name resolution.
+]
 
 @description('The private IP address of the Azure Firewall deployed in the hub, used as the next hop for forced tunneling from the Remote Desktop Server subnet.')
-param azureFirewallPrivateIp string
+param azureFirewallPrivateIp string = '10.100.0.4'
 
 @description('Tags to apply to all resources.')
-param tags object
-
-// ── Variables ───────────────────────────────────────────────────────────
-var desktopSubnetName = BastionOrAVD == 'Bastion' ? 'AzureBastionSubnet' : 'AVD01'
+param tags object = {
+  workloadName: 'SRERD'
+  environment: 'Dev'
+}
 
 // ── NSGs ──────────────────────────────────────────────────────────────────────
 // Azure Bastion requires specific inbound/outbound rules.

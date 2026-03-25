@@ -9,11 +9,11 @@ param location string = 'westus2'
 param environmentName string = 'Prod'
 
 @description('Local administrator username for VMs.')
-param adminUsername string
+param adminUsername string = 'azureuser'
 
 @description('Local administrator password for VMs.')
 @secure()
-param adminPassword string
+param adminPassword string = ''
 
 @description('Options: Bastion or AVD. Determines whether to deploy Azure Bastion with a virtual machine or Azure Virtual Desktop for remote access to the environment. Default is AVD.')
 @allowed([
@@ -23,7 +23,7 @@ param adminPassword string
 param BastionOrAVD string = 'AVD'
 
 @description('The Resource ID of the Log Analytics Workspace to link for monitoring. This should be the workspace deployed in the hub subscription.')
-param logAnalyticsWorkspaceId string
+param logAnalyticsWorkspaceId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/prod-rg-SOC-01/providers/microsoft.operationalinsights/workspaces/prod-law-soc-01'
 
 @description('Address prefix for the virtual network.')
 param vnetAddressPrefix string = '10.100.40.0/21'
@@ -46,13 +46,18 @@ param rdServerSubnetPrefix string = '10.100.41.0/24'
 param avdSubnetPrefix string = '10.100.42.0/24'
 
 @description('The private IP address of the Azure Firewall deployed in the hub, used as the next hop for forced tunneling from the Remote Desktop Server subnet.')
-param azureFirewallPrivateIp string
+param azureFirewallPrivateIp string = '10.100.0.4'
 
 @description('The string array of DNS servers to use on the Virtual Network.')
-param vNETDNSServers array
+param vNETDNSServers array = [
+  '168.63.129.16'
+]
 
 @description('Tags applied to every resource.')
-param tags object
+param tags object = {
+  workloadName: 'SRERD'
+  environment: 'Dev'
+}
 
 // ── Resource Groups ───────────────────────────────────────────────────────────
 
@@ -118,7 +123,6 @@ module bastion '../bastion/bastion.bicep' = if (BastionOrAVD == 'Bastion') {
     environmentName: environmentName
     tags: tags
     bastionSubnetId: networkingVirtualDesktop.outputs.AzureBastionSubnetId
-
     logAnalyticsWorkspaceId: logAnalyticsWorkspaceId
   }
 }

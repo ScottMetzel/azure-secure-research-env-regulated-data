@@ -1,22 +1,27 @@
 @description('Azure region for the Azure Firewall.')
-param location string
+param location string = 'westus2'
 
 @description('Environment name used as a prefix for resource names.')
 @minLength(1)
 @maxLength(20)
-param environmentName string
-
-@description('Tags to apply to all resources.')
-param tags object
+param environmentName string = 'Dev'
 
 @description('Resource ID of AzureFirewallSubnet (must be named exactly "AzureFirewallSubnet").')
-param firewallSubnetId string
+param firewallSubnetId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/Dev-RG-Network-01/providers/Microsoft.Network/virtualNetworks/Dev-VNET-Hub-01/subnets/AzureFirewallSubnet'
 
 @description('Resource ID of the Log Analytics workspace for diagnostics.')
-param logAnalyticsWorkspaceId string
+param logAnalyticsWorkspaceId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/prod-rg-SOC-01/providers/microsoft.operationalinsights/workspaces/prod-law-soc-01'
 
 @description('The DNS Servers to proxy to from the Azure Firewall DNS settings.')
-param dnsServers array
+param dnsServers array = [
+  '168.63.129' // Example: IP address of an internal DNS forwarder or resolver in the hub VNet. This should be updated to the actual DNS server(s) used in the environment for name resolution.
+]
+
+@description('Tags to apply to all resources.')
+param tags object = {
+  workloadName: 'SRERD'
+  environment: 'Dev'
+}
 
 // ── Public IP ─────────────────────────────────────────────────────────────────
 

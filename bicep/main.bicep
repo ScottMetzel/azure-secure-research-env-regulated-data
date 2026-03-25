@@ -6,50 +6,51 @@ targetScope = 'subscription'
 param location string = 'westus2'
 
 @description('Short environment name used as a prefix for all resource names.')
-@minLength(1)
-@maxLength(20)
-param environmentName string = 'production'
+@allowed([
+  'Dev'
+  'Test'
+  'Staging'
+  'Prod'
+])
+param environmentName string = 'Prod'
 
 @description('Tag - Workload Name.')
 param workloadName string = 'SRERD'
 
-@description('Tags applied to every resource.')
-param tags object = {
-  workloadName: workloadName
-  environment: environmentName
-}
+@description('Tag - Solution Owner.')
+param solutionOwner string = 'owner@example.com'
 
 @description('Local administrator username for VMs.')
-param adminUsername string
+param adminUsername string = 'azureuser'
 
 @description('Local administrator password for VMs.')
 @secure()
-param adminPassword string
+param adminPassword string = ''
 
-@description('Options: Bastion or AVD. Determines whether to deploy Azure Bastion with a virtual machine or Azure Virtual Desktop for remote access to the environment. Default is AVD.')
+@description('Options: Bastion or AVD. Determines whether to deploy Azure Bastion with a virtual machine or Azure Virtual Desktop for remote access to the environment. Default is Bastion.')
 @allowed([
   'Bastion'
   'AVD'
 ])
-param BastionOrAVD string = 'AVD'
+param BastionOrAVD string = 'Bastion'
 
 @description('Subscription ID where the research environment will be deployed. Used for cross-subscription resource deployments and role assignments.')
 @minLength(36)
 @maxLength(36)
-param researcherSubscriptionID string
+param researcherSubscriptionID string = '00000000-0000-0000-0000-000000000000'
 
 @description('Subscription ID where the hub VNet (with Firewall) will be deployed. Used for cross-subscription resource deployments and role assignments.')
 @minLength(36)
 @maxLength(36)
-param hubSubscriptionID string
+param hubSubscriptionID string = '00000000-0000-0000-0000-000000000000'
 
 @description('Subscription ID where the Bastion and virtual desktop environment will be deployed. Used for cross-subscription resource deployments and role assignments.')
 @minLength(36)
 @maxLength(36)
-param virtualDesktopSubscriptionID string
+param virtualDesktopSubscriptionID string = '00000000-0000-0000-0000-000000000000'
 
 @description('VM size for Data Science VMs.')
-param researcherVMSize string = 'Standard_D8s_v5'
+param researcherVMSize string = 'Standard_D4ds_v5'
 
 @description('Number of Data Science VMs.')
 @minValue(1)
@@ -57,7 +58,7 @@ param researcherVMSize string = 'Standard_D8s_v5'
 param researcherVMCount int = 1
 
 @description('The email address of the data approver, who will receive notifications and approval requests when researchers attempt to upload data to the secure environment.')
-param dataApproverEmail string
+param dataApproverEmail string = 'dataapprover@example.com'
 
 #disable-next-line no-hardcoded-env-urls
 param blobPrivateLinkZoneName string = 'privatelink.blob.core.windows.net'
@@ -127,6 +128,14 @@ var firewallPrivateIP = first(split(firewallPrivateIPCIDR, '/'))
 var vNETDNSServers = [
   firewallPrivateIP
 ]
+
+@description('Tags applied to every resource.')
+var tags = {
+  Description: 'Secure Research Environment for Regulated Data'
+  Environment: environmentName
+  Owner: solutionOwner
+  WorkloadName: workloadName
+}
 
 // ── Subscription deployments ───────────────────────────────────────────────────────────
 
