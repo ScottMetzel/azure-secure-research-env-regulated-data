@@ -12,9 +12,12 @@ param hubVnetName string = 'Dev-VNET-Hub-01'
 @description('Hub VNET Resource ID')
 param hubVnetId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/Dev-RG-Network-01/providers/Microsoft.Network/virtualNetworks/Dev-VNET-Hub-01'
 
+@description('The date and time in UTC format. Used as part of the deployment name')
+param deploymentTimestamp string = utcNow()
+
 // ── Resources via Modules ───────────────────────────────────────────────────────────
 module remoteDesktopSpokeToHubPeering '../network/vnetPeering.bicep' = {
-  name: 'remoteDesktopSpokeToHubPeering'
+  name: 'remoteDesktopSpokeToHubPeering_${deploymentTimestamp}'
   scope: resourceGroup(remoteDesktopVnetRgName)
   params: {
     localVnetName: remoteDesktopVnetName

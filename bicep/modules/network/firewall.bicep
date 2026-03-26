@@ -6,7 +6,7 @@ param location string = 'westus2'
 @maxLength(20)
 param environmentName string = 'Dev'
 
-@description('Resource ID of AzureFirewallSubnet (must be named exactly "AzureFirewallSubnet").')
+@description('Resource ID of AzureFirewallSubnet (must be named exactly AzureFirewallSubnet).')
 param firewallSubnetId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/Dev-RG-Network-01/providers/Microsoft.Network/virtualNetworks/Dev-VNET-Hub-01/subnets/AzureFirewallSubnet'
 
 @description('Resource ID of the Log Analytics workspace for diagnostics.')
@@ -14,8 +14,23 @@ param logAnalyticsWorkspaceId string = '/subscriptions/00000000-0000-0000-0000-0
 
 @description('The DNS Servers to proxy to from the Azure Firewall DNS settings.')
 param dnsServers array = [
-  '168.63.129' // Example: IP address of an internal DNS forwarder or resolver in the hub VNet. This should be updated to the actual DNS server(s) used in the environment for name resolution.
+  '168.63.129.16' // Example: IP address of an internal DNS forwarder or resolver in the hub VNet. This should be updated to the actual DNS server(s) used in the environment for name resolution.
 ]
+
+@description('Address prefix for the Remote Desktop Server subnet.')
+param net_RemoteDesktop_rdServerSubnetPrefix string = '10.100.41.0/24'
+
+@description('Address prefix for the first Azure Virtual Desktop subnet.')
+param net_RemoteDesktop_avdSubnetPrefix string = '10.100.42.0/24'
+
+@description('Address prefix for the first Data Science Server subnet.')
+param net_researcher_ServerSubnetPrefix string = '10.100.61.0/28'
+
+@description('Azure DNS Private Resolver Inbound Endpoint Static Private IP Address. Must be within the address range of the AzDNSPRInbound01 subnet defined in the hub virtual network.')
+param net_hub_azDNSPRInboundStaticIP string = '10.10.10.10'
+
+@description('The private IP address of the Azure Firewall deployed in the hub, used as the next hop for forced tunneling from the Remote Desktop Server subnet.')
+param net_hub_azureFirewallPrivateIP string = '10.100.0.4'
 
 @description('Tags to apply to all resources.')
 param tags object = {
@@ -25,7 +40,7 @@ param tags object = {
 
 // ── Public IP ─────────────────────────────────────────────────────────────────
 
-resource firewallPublicIp 'Microsoft.Network/publicIPAddresses@2023-05-01' = {
+resource firewallPublicIp 'Microsoft.Network/publicIPAddresses@2024-05-01' = {
   name: '${environmentName}-PIP-AzureFirewall-01'
   location: location
   tags: tags
@@ -39,10 +54,42 @@ resource firewallPublicIp 'Microsoft.Network/publicIPAddresses@2023-05-01' = {
     publicIPAddressVersion: 'IPv4'
   }
 }
+// ── IP Groups ───────────────────────────────────────────────────────────
+resource ipgPrivateNetworks 'Microsoft.Network/ipGroups@2024-05-01' = {
+  name: '${environmentName}-IPG-PrivateNetworks-01'
+  location: location
+  properties: {
+    ipAddresses: [
+      '10.0.0.0/8'
+      '192.168.0.0/16'
+      '172.16.0.0/12'
+    ]
+  }
+}
 
+resource ipgRemoteDesktop01 'Microsoft.Network/ipGroups@2024-05-01' = {
+  name: '${environmentName}-IPG-RemoteDesktop-01'
+  location: location
+  properties: {
+    ipAddresses: [
+      net_RemoteDesktop_rdServerSubnetPrefix
+      net_RemoteDesktop_avdSubnetPrefix
+    ]
+  }
+}
+
+resource ipgResearcherVM01 'Microsoft.Network/ipGroups@2024-05-01' = {
+  name: '${environmentName}-IPG-ResearcherVM-01'
+  location: location
+  properties: {
+    ipAddresses: [
+      net_researcher_ServerSubnetPrefix
+    ]
+  }
+}
 // ── Firewall Policy ───────────────────────────────────────────────────────────
 
-resource firewallPolicy 'Microsoft.Network/firewallPolicies@2023-05-01' = {
+resource firewallPolicy 'Microsoft.Network/firewallPolicies@2024-05-01' = {
   name: '${environmentName}-AFWP-Core-01'
   location: location
   tags: tags
@@ -58,25 +105,219 @@ resource firewallPolicy 'Microsoft.Network/firewallPolicies@2023-05-01' = {
   }
 }
 
-// ── Firewall Policy Rule Collection Group ─────────────────────────────────────
+// ── Firewall Policy Rule Collection Groups ─────────────────────────────────────
 
-resource ruleCollectionGroup 'Microsoft.Network/firewallPolicies/ruleCollectionGroups@2023-05-01' = {
-  name: '${environmentName}-AFWP-RCG-01'
+resource fwPolicyRCGGlobalAzurePlatform 'Microsoft.Network/firewallPolicies/ruleCollectionGroups@2024-05-01' = {
+  name: 'Azure-Platform'
   parent: firewallPolicy
   properties: {
-    priority: 200
+    priority: 1000
     ruleCollections: [
       {
         ruleCollectionType: 'FirewallPolicyFilterRuleCollection'
-        name: 'Allow-Azure-Services'
-        priority: 100
+        name: 'Azure-Platform_L4_Allow'
+        priority: 500
+        action: {
+          type: 'Allow'
+        }
+        rules: [
+          {
+            ruleType: 'NetworkRule'
+            name: 'Azure-Global-Platform-IP_Allow'
+            description: 'Allow outbound traffic to the Azure global platform IP address, used by various Azure services for operational needs.'
+            sourceIpGroups: [
+              ipgPrivateNetworks.id
+            ]
+            destinationAddresses: [
+              '168.63.129.16'
+            ]
+            ipProtocols: [
+              'TCP'
+            ]
+            destinationPorts: [
+              '53'
+              '80'
+              '32526'
+            ]
+          }
+          {
+            ruleType: 'NetworkRule'
+            name: 'Azure-Global-Platform-FQDN_Allow'
+            description: 'Allow outbound traffic to the Azure global platform FQDNs, used by various Azure services for operational needs.'
+            sourceIpGroups: [
+              ipgPrivateNetworks.id
+            ]
+            destinationFqdns: [
+              #disable-next-line no-hardcoded-env-urls
+              'azkms.core.windows.net'
+              #disable-next-line no-hardcoded-env-urls
+              'kms.core.windows.net'
+            ]
+            ipProtocols: [
+              'TCP'
+            ]
+            destinationPorts: [
+              '1688'
+            ]
+          }
+        ]
+      }
+      {
+        ruleCollectionType: 'FirewallPolicyFilterRuleCollection'
+        name: 'Azure-Virtual-Desktop-Service_L4_Allow'
+        priority: 501
+        action: {
+          type: 'Allow'
+        }
+        rules: [
+          {
+            ruleType: 'NetworkRule'
+            name: 'Azure-Virtual-Desktop-Service_Service-Tag-01_Allow'
+            description: 'Allow outbound traffic to the Azure Virtual Desktop service endpoints, used by various Azure services for operational needs.'
+            sourceIpGroups: [
+              ipgRemoteDesktop01.id
+            ]
+            destinationAddresses: [
+              'AzureActiveDirectory'
+              'WindowsVirtualDesktop'
+              'AzureFrontDoor.Frontend'
+              'AzureMonitor'
+            ]
+            ipProtocols: [
+              'TCP'
+            ]
+            destinationPorts: [
+              '443'
+            ]
+          }
+          {
+            ruleType: 'NetworkRule'
+            name: 'Azure-Virtual-Desktop-IP-01_Allow'
+            description: 'Allow outbound traffic to the Azure FQDNs and wildcards for AVD services, used by various Azure services for operational needs.'
+            sourceIpGroups: [
+              ipgRemoteDesktop01.id
+            ]
+            destinationAddresses: [
+              '169.254.169.254'
+              '168.63.129.16'
+            ]
+            ipProtocols: [
+              'TCP'
+            ]
+            destinationPorts: [
+              '80'
+            ]
+          }
+          {
+            ruleType: 'NetworkRule'
+            name: 'Azure-Virtual-Desktop-FQDN-03_Allow'
+            description: 'Allow outbound traffic to the Azure FQDNs and wildcards for AVD services, used by various Azure services for operational needs.'
+            sourceIpGroups: [
+              ipgRemoteDesktop01.id
+            ]
+            destinationFqdns: [
+              #disable-next-line no-hardcoded-env-urls
+              'azkms.core.windows.net'
+            ]
+            ipProtocols: [
+              'TCP'
+            ]
+            destinationPorts: [
+              '1688'
+            ]
+          }
+          {
+            ruleType: 'NetworkRule'
+            name: 'Azure-Virtual-Desktop-IP-02_Allow'
+            description: 'Allow outbound traffic to the Azure IP Addresses for AVD services, used by various Azure services for operational needs.'
+            sourceIpGroups: [
+              ipgRemoteDesktop01.id
+            ]
+            destinationAddresses: [
+              '51.5.0.0/16'
+            ]
+            ipProtocols: [
+              'UDP'
+            ]
+            destinationPorts: [
+              '3478'
+            ]
+          }
+        ]
+      }
+      {
+        ruleCollectionType: 'FirewallPolicyFilterRuleCollection'
+        name: 'Azure-Virtual-Desktop-Service_L7_Allow'
+        priority: 502
         action: {
           type: 'Allow'
         }
         rules: [
           {
             ruleType: 'ApplicationRule'
-            name: 'Allow-AzureMonitor'
+            name: 'Azure-Virtual-Desktop-FQDN-01_Allow'
+            description: 'Allow outbound traffic to the Azure FQDNs and wildcards for AVD services, used by various Azure services for operational needs.'
+            sourceIpGroups: [
+              ipgRemoteDesktop01.id
+            ]
+            targetFqdns: [
+              'oneocsp.microsoft.com'
+              'www.microsoft.com'
+              '*.aikcertaia.microsoft.com'
+              #disable-next-line no-hardcoded-env-urls
+              'azcsprodeusaikpublish.blob.core.windows.net'
+              '*.microsoftaik.azure.net'
+              'ctldl.windowsupdate.com'
+              'www.msftconnecttest.com'
+              '*.digicert.com'
+            ]
+            protocols: [
+              { protocolType: 'Http', port: 80 }
+            ]
+          }
+          {
+            ruleType: 'ApplicationRule'
+            name: 'Azure-Virtual-Desktop-FQDN-02_Allow'
+            description: 'Allow outbound traffic to the Azure FQDNs and wildcards for AVD services, used by various Azure services for operational needs.'
+            sourceIpGroups: [
+              ipgRemoteDesktop01.id
+            ]
+            targetFqdns: [
+              #disable-next-line no-hardcoded-env-urls
+              '*.prod.warm.ingest.monitor.core.windows.net'
+              #disable-next-line no-hardcoded-env-urls
+              'gcs.prod.monitoring.core.windows.net'
+              #disable-next-line no-hardcoded-env-urls
+              'mrsglobalsteus2prod.blob.core.windows.net'
+              #disable-next-line no-hardcoded-env-urls
+              'wvdportalstorageblob.blob.core.windows.net'
+              'aka.ms'
+              '*.windows.cloud.microsoft'
+              '*.windows.static.microsoft'
+              '*.events.data.microsoft.com'
+              '*.prod.do.dsp.mp.microsoft.com'
+              '*.sfx.ms'
+              '*.azure-dns.com'
+              '*.azure-dns.net'
+              '*eh.servicebus.windows.net'
+            ]
+            protocols: [
+              { protocolType: 'Https', port: 443 }
+            ]
+          }
+        ]
+      }
+      {
+        ruleCollectionType: 'FirewallPolicyFilterRuleCollection'
+        name: 'Azure-Platform_L7_Allow'
+        priority: 503
+        action: {
+          type: 'Allow'
+        }
+        rules: [
+          {
+            ruleType: 'ApplicationRule'
+            name: 'Azure-Monitor_Allow'
             description: 'Allow outbound traffic to Azure Monitor endpoints for diagnostics and telemetry.'
             protocols: [
               { protocolType: 'Https', port: 443 }
@@ -86,15 +327,16 @@ resource ruleCollectionGroup 'Microsoft.Network/firewallPolicies/ruleCollectionG
               '*.oms.opinsights.azure.com'
               '*.monitoring.azure.com'
             ]
-            sourceAddresses: ['*']
+            sourceIpGroups: [
+              ipgPrivateNetworks.id
+            ]
           }
           {
             ruleType: 'ApplicationRule'
-            name: 'Allow-MicrosoftUpdate'
+            name: 'Microsoft-Update_Allow'
             description: 'Allow Windows Update traffic for patch management.'
             protocols: [
               { protocolType: 'Https', port: 443 }
-              { protocolType: 'Http', port: 80 }
             ]
             targetFqdns: [
               '*.update.microsoft.com'
@@ -102,46 +344,133 @@ resource ruleCollectionGroup 'Microsoft.Network/firewallPolicies/ruleCollectionG
               '*.download.windowsupdate.com'
               '*.delivery.mp.microsoft.com'
             ]
-            sourceAddresses: ['*']
+            sourceIpGroups: [
+              ipgPrivateNetworks.id
+            ]
           }
           {
             ruleType: 'ApplicationRule'
-            name: 'Allow-AzureActiveDirectory'
+            name: 'Entra-ID_Allow'
             description: 'Allow Microsoft Entra ID (Azure AD) authentication endpoints.'
             protocols: [
               { protocolType: 'Https', port: 443 }
             ]
             targetFqdns: [
-              // These FQDNs are Microsoft-defined global endpoints for Entra ID authentication.
-              // They are stable, well-known addresses (not environment-specific) that are
-              // required for AAD-joined VMs, Managed Identity token acquisition, and Azure CLI
-              // sign-in to function correctly inside the isolated network.
               #disable-next-line no-hardcoded-env-urls
               'login.microsoftonline.com'
               'login.windows.net'
               #disable-next-line no-hardcoded-env-urls
               '*.login.microsoftonline.com'
             ]
-            sourceAddresses: ['*']
+            sourceIpGroups: [
+              ipgPrivateNetworks.id
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+
+resource fwPolicyRCGGlobalInternal 'Microsoft.Network/firewallPolicies/ruleCollectionGroups@2024-05-01' = {
+  name: '${tags.WorkloadName}-Global_Internal'
+  parent: firewallPolicy
+  properties: {
+    priority: 1010
+    ruleCollections: [
+      {
+        ruleCollectionType: 'FirewallPolicyFilterRuleCollection'
+        name: 'Internal-Services_L4_Allow'
+        priority: 550
+        action: {
+          type: 'Allow'
+        }
+        rules: [
+          {
+            ruleType: 'NetworkRule'
+            name: 'DNS_Allow'
+            description: 'Allow DNS traffic to Azure Firewall and the Inbound Endpoint of the centrally-managed Azure DNS Private Resolver.'
+            sourceIpGroups: [
+              ipgPrivateNetworks.id
+            ]
+            destinationAddresses: [
+              net_hub_azureFirewallPrivateIP
+              net_hub_azDNSPRInboundStaticIP
+            ]
+            ipProtocols: [
+              'TCP'
+              'UDP'
+            ]
+            destinationPorts: ['53']
+          }
+        ]
+      }
+    ]
+  }
+}
+
+resource fwPolicyRCGInternal 'Microsoft.Network/firewallPolicies/ruleCollectionGroups@2024-05-01' = {
+  name: '${tags.WorkloadName}-Researcher_Internal-and-Internet'
+  parent: firewallPolicy
+  properties: {
+    priority: 1500
+    ruleCollections: [
+      {
+        ruleCollectionType: 'FirewallPolicyFilterRuleCollection'
+        name: 'RemoteDesktop-to-ResearcherVM_L4_Allow'
+        priority: 600
+        action: {
+          type: 'Allow'
+        }
+        rules: [
+          {
+            ruleType: 'NetworkRule'
+            name: 'SSH-RDP_Allow'
+            description: 'Allow SSH and RDP traffic from the Remote Desktop Spoke VNET to the Researcher VM Subnet in the Researcher Spoke VNET.'
+            sourceIpGroups: [
+              ipgRemoteDesktop01.id
+            ]
+            destinationIpGroups: [
+              ipgResearcherVM01.id
+            ]
+            ipProtocols: [
+              'TCP'
+            ]
+            destinationPorts: [
+              '22'
+              '3389'
+            ]
           }
         ]
       }
       {
         ruleCollectionType: 'FirewallPolicyFilterRuleCollection'
-        name: 'Deny-Internet-Egress'
-        priority: 65000
+        name: 'Researcher-VM-to-Internet_L7_Allow'
+        priority: 601
         action: {
-          type: 'Deny'
+          type: 'Allow'
         }
         rules: [
           {
-            ruleType: 'NetworkRule'
-            name: 'Deny-All-Outbound-Internet'
-            description: 'Deny all outbound internet traffic not explicitly allowed by higher-priority rules.'
-            ipProtocols: ['Any']
-            sourceAddresses: ['*']
-            destinationAddresses: ['*']
-            destinationPorts: ['*']
+            ruleType: 'ApplicationRule'
+            name: 'Internet-TCP-443-01_Allow'
+            description: 'Allow HTTPS traffic from the Researcher VM to the Internet.'
+            sourceAddresses: [
+              net_researcher_ServerSubnetPrefix
+            ]
+            targetFqdns: [
+              'archive.ubuntu.com'
+              'cloud.r-project.org'
+              'developer.download.nvidia.com'
+              'nvidia.github.io'
+              'packages.microsoft.com'
+              'ppa.launchpadcontent.net'
+              'repo.scala-sbt.org'
+              'security.ubuntu.com'
+            ]
+            protocols: [
+              { port: 443, protocolType: 'Https' }
+            ]
           }
         ]
       }
@@ -150,11 +479,11 @@ resource ruleCollectionGroup 'Microsoft.Network/firewallPolicies/ruleCollectionG
 }
 
 // ── Azure Firewall ────────────────────────────────────────────────────────────
-
-resource firewall 'Microsoft.Network/azureFirewalls@2023-05-01' = {
+resource firewall 'Microsoft.Network/azureFirewalls@2024-05-01' = {
   name: '${environmentName}-AFW-Core-01'
   location: location
   tags: tags
+  zones: ['1', '2', '3']
   properties: {
     sku: {
       name: 'AZFW_VNet'
@@ -171,7 +500,11 @@ resource firewall 'Microsoft.Network/azureFirewalls@2023-05-01' = {
       }
     ]
   }
-  dependsOn: [ruleCollectionGroup]
+  dependsOn: [
+    fwPolicyRCGGlobalAzurePlatform
+    fwPolicyRCGGlobalInternal
+    fwPolicyRCGInternal
+  ]
 }
 
 // ── Diagnostics ───────────────────────────────────────────────────────────────

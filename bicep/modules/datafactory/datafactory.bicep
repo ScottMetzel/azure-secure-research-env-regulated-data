@@ -42,7 +42,7 @@ var keyVaultSecretsUserRoleId = '4633458b-17de-408a-b874-0445c86b69e6'
 // ── Data Factory ──────────────────────────────────────────────────────────────
 
 resource dataFactory 'Microsoft.DataFactory/factories@2018-06-01' = {
-  name: '${environmentName}-adf'
+  name: '${environmentName}-${tags.workloadName}-adf'
   location: location
   tags: tags
   identity: {
@@ -79,14 +79,14 @@ resource adfAutoResolveIr 'Microsoft.DataFactory/factories/integrationRuntimes@2
 // ── Private Endpoint ──────────────────────────────────────────────────────────
 
 resource adfPrivateEndpoint 'Microsoft.Network/privateEndpoints@2023-05-01' = {
-  name: '${environmentName}-adf-pe'
+  name: '${environmentName}-${tags.workloadName}-adf-pe'
   location: location
   tags: tags
   properties: {
     subnet: { id: subnetId }
     privateLinkServiceConnections: [
       {
-        name: '${environmentName}-adf-plsc'
+        name: '${environmentName}-${tags.workloadName}-adf-plsc'
         properties: {
           privateLinkServiceId: dataFactory.id
           groupIds: ['dataFactory']
@@ -97,12 +97,12 @@ resource adfPrivateEndpoint 'Microsoft.Network/privateEndpoints@2023-05-01' = {
 }
 
 resource adfDnsZoneGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2023-05-01' = {
-  name: 'adfDnsZoneGroup'
+  name: 'default'
   parent: adfPrivateEndpoint
   properties: {
     privateDnsZoneConfigs: [
       {
-        name: 'privatelink-datafactory-azure-net'
+        name: 'privatelink_datafactory_azure_net'
         properties: {
           privateDnsZoneId: dataFactoryPrivateDnsZoneId
         }

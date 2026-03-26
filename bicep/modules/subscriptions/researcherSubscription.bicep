@@ -8,26 +8,26 @@ param location string = 'westus2'
 @maxLength(20)
 param environmentName string = 'Prod'
 
-@description('Address prefix for the virtual network.')
-param vnetAddressPrefix string = '10.100.60.0/21'
+@description('Address prefix for the Researcher Spoke Azure Virtual Network.')
+param net_researcher_vnetAddressPrefix string = '10.100.56.0/21'
 
-param webSubnetPrefix string = '10.100.60.64/27'
-param appSubnetPrefix string = '10.100.60.96/27'
-param dbSubnetPrefix string = '10.100.60.128/27'
+param net_researcher_webSubnetPrefix string = '10.100.56.64/27'
+param net_researcher_appSubnetPrefix string = '10.100.56.96/27'
+param net_researcher_dbSubnetPrefix string = '10.100.56.128/27'
 
 @description('Address prefix for the storage subnet, used with Azure Storage Accounts and FSLogix.')
-param storageSubnetPrefix string = '10.100.60.160/27'
+param net_researcher_storageSubnetPrefix string = '10.100.56.160/27'
 
-param webVNETIntegrationSubnetPrefix string = '10.100.60.192/27'
+param net_researcher_webVNETIntegrationSubnetPrefix string = '10.100.56.192/27'
 
 @description('Address prefix for the first Data Science Server subnet.')
-param researcherServerSubnetPrefix string = '10.100.61.0/28'
+param net_researcher_ServerSubnetPrefix string = '10.100.61.0/28'
 
 @description('The private IP address of the Azure Firewall deployed in the hub, used as the next hop for forced tunneling from the Remote Desktop Server subnet.')
-param azureFirewallPrivateIp string = ''
+param net_hub_azureFirewallPrivateIP string = '10.100.0.4'
 
 @description('Local administrator username for VMs.')
-param adminUsername string = ''
+param adminUsername string = 'azureuser'
 
 @description('Local administrator password for VMs.')
 @secure()
@@ -42,25 +42,31 @@ param researcherVMSize string = 'Standard_D8s_v5'
 param researcherVMCount int = 1
 
 @description('The email address of the data approver, who will receive notifications and approval requests when researchers attempt to upload data to the secure environment.')
-param dataApproverEmail string = ''
+param dataApproverEmail string = 'data.approver@example.com'
 
 @description('The Resource ID of the Log Analytics Workspace to link for monitoring. This should be the workspace deployed in the hub subscription.')
-param logAnalyticsWorkspaceId string = ''
+param logAnalyticsWorkspaceId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/prod-rg-SOC-01/providers/microsoft.operationalinsights/workspaces/prod-law-soc-01'
 
 @description('Resource ID of the Azure Blob Storage Private DNS Zone.')
-param blobStoragePrivateDnsZoneId string = ''
+#disable-next-line no-hardcoded-env-urls
+param blobStoragePrivateDnsZoneId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/Dev-RG-Network-01/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.windows.net'
 
 @description('Resource ID of the Key Vault Private DNS Zone.')
-param keyVaultPrivateDnsZoneId string = ''
+param keyVaultPrivateDnsZoneId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/Dev-RG-Network-01/providers/Microsoft.Network/privateDnsZones/privatelink.vaultcore.azure.net'
 
 @description('Resource ID of the Data Factory Private DNS Zone.')
-param dataFactoryPrivateDnsZoneId string = ''
+param dataFactoryPrivateDnsZoneId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/Dev-RG-Network-01/providers/Microsoft.Network/privateDnsZones/privatelink.datafactory.azure.net'
 
 @description('Resource ID of the Azure ML Private DNS Zone.')
-param azureMLPrivateDnsZoneId string = ''
+param azureMLPrivateDnsZoneId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/Dev-RG-Network-01/providers/Microsoft.Network/privateDnsZones/privatelink.azureml.ms'
 
 @description('The string array of DNS servers to use on the Virtual Network.')
-param vNETDNSServers array = []
+param vNETDNSServers array = [
+  '168.63.129.16'
+]
+
+@description('The date and time in UTC format. Used as part of the deployment name')
+param deploymentTimestamp string = utcNow()
 
 @description('Tags applied to every resource.')
 param tags object = {
@@ -85,35 +91,35 @@ resource researcherRG 'Microsoft.Resources/resourceGroups@2023-07-01' = {
 
 @description('Spoke VNET resource group — contains the spoke Virtual Network (including Researcher VM subnet, and subnets for resources with Private Endpoints which researchers will access).')
 resource spokeVNETRG 'Microsoft.Resources/resourceGroups@2023-07-01' = {
-  name: '${environmentName}-RG-NetworkInfrastructure-01'
+  name: '${environmentName}-RG-Network-01'
   location: location
   tags: tags
 }
 
 // ── Resources via Modules ───────────────────────────────────────────────────────────
 module researcherNetworking '../network/networking_researcher.bicep' = {
-  name: 'researcherNetworking'
+  name: 'researcherNetworking_${deploymentTimestamp}'
   scope: spokeVNETRG
   params: {
     location: location
     environmentName: environmentName
     tags: tags
-    vnetAddressPrefix: vnetAddressPrefix
-    webSubnetPrefix: webSubnetPrefix
-    appSubnetPrefix: appSubnetPrefix
-    dbSubnetPrefix: dbSubnetPrefix
-    storageSubnetPrefix: storageSubnetPrefix
-    webVNETIntegrationSubnetPrefix: webVNETIntegrationSubnetPrefix
-    researcherServerSubnetPrefix: researcherServerSubnetPrefix
+    vnetAddressPrefix: net_researcher_vnetAddressPrefix
+    webSubnetPrefix: net_researcher_webSubnetPrefix
+    appSubnetPrefix: net_researcher_appSubnetPrefix
+    dbSubnetPrefix: net_researcher_dbSubnetPrefix
+    storageSubnetPrefix: net_researcher_storageSubnetPrefix
+    webVNETIntegrationSubnetPrefix: net_researcher_webVNETIntegrationSubnetPrefix
+    researcherServerSubnetPrefix: net_researcher_ServerSubnetPrefix
     vNETDNSServers: vNETDNSServers
-    azureFirewallPrivateIp: azureFirewallPrivateIp
+    azureFirewallPrivateIp: net_hub_azureFirewallPrivateIP
   }
 }
 
 // ── Key Vault (compute-rg, private endpoint in PrivateEndpointSubnet) ─────────
 
 module keyvault '../keyvault/keyvault.bicep' = {
-  name: 'keyvault'
+  name: 'keyvault_${deploymentTimestamp}'
   scope: researcherRG
   params: {
     location: location
@@ -131,7 +137,7 @@ module keyvault '../keyvault/keyvault.bicep' = {
 // Requirement: Public storage account in its own resource group.
 
 module storageIngestion '../storage/storageIngestion.bicep' = {
-  name: 'storageIngestion'
+  name: 'storageIngestion_${deploymentTimestamp}'
   scope: dataOwnerApproverRG
   params: {
     location: location
@@ -144,7 +150,7 @@ module storageIngestion '../storage/storageIngestion.bicep' = {
 // ── Secure Storage (compute-rg, private endpoint in PrivateEndpointSubnet) ────
 
 module storageSecure '../storage/storageSecure.bicep' = {
-  name: 'storageSecure'
+  name: 'storageSecure_${deploymentTimestamp}'
   scope: researcherRG
   params: {
     location: location
@@ -161,7 +167,7 @@ module storageSecure '../storage/storageSecure.bicep' = {
 // ── Data Factory (compute-rg, private endpoint in DataIntegrationSubnet) ──────
 
 module datafactory '../datafactory/datafactory.bicep' = {
-  name: 'datafactory'
+  name: 'datafactory_${deploymentTimestamp}'
   scope: researcherRG
   params: {
     location: location
@@ -182,7 +188,7 @@ module datafactory '../datafactory/datafactory.bicep' = {
 // The role assignment must be deployed in ingest-rg to avoid a cross-RG scope error.
 
 module adfIngestionRoleAssignment '../roleAssignment/roleAssignment.bicep' = {
-  name: 'adfIngestionRoleAssignment'
+  name: 'adfIngestionRoleAssignment_${deploymentTimestamp}'
   scope: dataOwnerApproverRG
   params: {
     principalId: datafactory.outputs.dataFactoryPrincipalId
@@ -194,7 +200,7 @@ module adfIngestionRoleAssignment '../roleAssignment/roleAssignment.bicep' = {
 // ── Data Science VMs (compute-rg, NICs in ComputeSubnet) ─────────────────────
 
 module datasciencevm '../compute/datasciencevm.bicep' = {
-  name: 'datasciencevm'
+  name: 'datasciencevm_${deploymentTimestamp}'
   scope: researcherRG
   params: {
     location: location
@@ -213,7 +219,7 @@ module datasciencevm '../compute/datasciencevm.bicep' = {
 // Requirement: Logic App in its own resource group.
 
 module egressApproval '../logicapp/egressApproval.bicep' = {
-  name: 'egressApproval'
+  name: 'egressApproval_${deploymentTimestamp}'
   scope: dataOwnerApproverRG
   params: {
     location: location

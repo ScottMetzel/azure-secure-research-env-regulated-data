@@ -63,15 +63,9 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
   }
 }
 
-// ── Private DNS Zone (vault) ──────────────────────────────────────────────────
-
-resource kvDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' existing = {
-  name: 'privatelink.vaultcore.azure.net'
-}
-
 // ── Private Endpoint ──────────────────────────────────────────────────────────
 
-resource kvPrivateEndpoint 'Microsoft.Network/privateEndpoints@2023-05-01' = {
+resource kvPrivateEndpoint 'Microsoft.Network/privateEndpoints@2025-05-01' = {
   name: '${environmentName}-kv-pe'
   location: location
   tags: tags
@@ -89,15 +83,15 @@ resource kvPrivateEndpoint 'Microsoft.Network/privateEndpoints@2023-05-01' = {
   }
 }
 
-resource kvDnsZoneGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2023-05-01' = {
-  name: 'kvDnsZoneGroup'
+resource kvDnsZoneGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2025-05-01' = {
+  name: 'default'
   parent: kvPrivateEndpoint
   properties: {
     privateDnsZoneConfigs: [
       {
-        name: 'privatelink-vaultcore-azure-net'
+        name: 'privatelink_vaultcore_azure_net'
         properties: {
-          privateDnsZoneId: kvDnsZone.id
+          privateDnsZoneId: keyVaultPrivateDnsZoneId
         }
       }
     ]

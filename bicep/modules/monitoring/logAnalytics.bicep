@@ -39,6 +39,27 @@ resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2022-10
   }
 }
 
+// Create Microsoft Sentinel on the Log Analytics Workspace
+resource sentinel 'Microsoft.OperationsManagement/solutions@2015-11-01-preview' = {
+  name: 'SecurityInsights(${workspaceName})'
+  location: location
+  properties: {
+    workspaceResourceId: logAnalyticsWorkspace.id
+  }
+  plan: {
+    name: 'SecurityInsights(${workspaceName})'
+    product: 'OMSGallery/SecurityInsights'
+    promotionCode: ''
+    publisher: 'Microsoft'
+  }
+}
+
+// Onboard Sentinel after it has been created
+resource onboardingStates 'Microsoft.SecurityInsights/onboardingStates@2025-09-01' = {
+  scope: logAnalyticsWorkspace
+  name: 'default'
+}
+
 // ── Outputs ───────────────────────────────────────────────────────────────────
 
 @description('The Log Analytics workspace customer/GUID ID (used for direct Log Analytics API queries and some monitoring tool configurations).')

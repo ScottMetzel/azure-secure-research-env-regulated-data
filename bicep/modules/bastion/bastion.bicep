@@ -100,4 +100,4 @@ output bastionId string = bastion.id
 output bastionName string = bastion.name
 
 @description('The public IP address of Azure Bastion.')
-output bastionPublicIpAddress string = bastionPublicIp.properties.ipAddress
+output bastionPublicIpAddress string = bastionPublicIp!.properties.ipAddress

@@ -26,32 +26,35 @@ param BastionOrAVD string = 'AVD'
 param logAnalyticsWorkspaceId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/prod-rg-SOC-01/providers/microsoft.operationalinsights/workspaces/prod-law-soc-01'
 
 @description('Address prefix for the virtual network.')
-param vnetAddressPrefix string = '10.100.40.0/21'
+param net_RemoteDesktop_vnetAddressPrefix string = '10.100.40.0/21'
 
 @description('Address prefix for the Azure Bastion subnet.')
-param bastionSubnetPrefix string = '10.100.40.0/26'
+param net_RemoteDesktop_bastionSubnetPrefix string = '10.100.40.0/26'
 
-param webSubnetPrefix string = '10.100.40.64/27'
-param appSubnetPrefix string = '10.100.40.96/27'
-param dbSubnetPrefix string = '10.100.40.128/27'
+param net_RemoteDesktop_webSubnetPrefix string = '10.100.40.64/27'
+param net_RemoteDesktop_appSubnetPrefix string = '10.100.40.96/27'
+param net_RemoteDesktop_dbSubnetPrefix string = '10.100.40.128/27'
 @description('Address prefix for the storage subnet, used with Azure Storage Accounts and FSLogix.')
-param storageSubnetPrefix string = '10.100.40.160/27'
+param net_RemoteDesktop_storageSubnetPrefix string = '10.100.40.160/27'
 
-param webVNETIntegrationSubnetPrefix string = '10.100.40.192/27'
+param net_RemoteDesktop_webVNETIntegrationSubnetPrefix string = '10.100.40.192/27'
 
 @description('Address prefix for the Remote Desktop Server subnet.')
-param rdServerSubnetPrefix string = '10.100.41.0/24'
+param net_RemoteDesktop_rdServerSubnetPrefix string = '10.100.41.0/24'
 
 @description('Address prefix for the first Azure Virtual Desktop subnet.')
-param avdSubnetPrefix string = '10.100.42.0/24'
+param net_RemoteDesktop_avdSubnetPrefix string = '10.100.42.0/24'
 
 @description('The private IP address of the Azure Firewall deployed in the hub, used as the next hop for forced tunneling from the Remote Desktop Server subnet.')
-param azureFirewallPrivateIp string = '10.100.0.4'
+param net_hub_azureFirewallPrivateIP string = '10.100.0.4'
 
 @description('The string array of DNS servers to use on the Virtual Network.')
 param vNETDNSServers array = [
   '168.63.129.16'
 ]
+
+@description('The date and time in UTC format. Used as part of the deployment name')
+param deploymentTimestamp string = utcNow()
 
 @description('Tags applied to every resource.')
 param tags object = {
@@ -63,7 +66,7 @@ param tags object = {
 
 @description('Spoke VNET resource group — contains the spoke Virtual Network (including Bastion subnet, Remote Desktop Server VM subnet, and AVD subnet for future AVD deployment)')
 resource spokeVNETRG 'Microsoft.Resources/resourceGroups@2023-07-01' = {
-  name: '${environmentName}-RG-NetworkInfrastructure-01'
+  name: '${environmentName}-RG-Network-01'
   location: location
   tags: tags
 }
@@ -91,23 +94,23 @@ resource avdRG 'Microsoft.Resources/resourceGroups@2023-07-01' = if (BastionOrAV
 
 // ── Resources ───────────────────────────────────────────────────────────
 module networkingVirtualDesktop '../network/networking_virtualDesktop.bicep' = {
-  name: 'virtualDesktopNetworking'
+  name: 'virtualDesktopNetworking_${deploymentTimestamp}'
   scope: spokeVNETRG
   params: {
     location: location
     environmentName: environmentName
     BastionOrAVD: BastionOrAVD
-    vnetAddressPrefix: vnetAddressPrefix
-    bastionSubnetPrefix: bastionSubnetPrefix
-    webSubnetPrefix: webSubnetPrefix
-    appSubnetPrefix: appSubnetPrefix
-    dbSubnetPrefix: dbSubnetPrefix
-    storageSubnetPrefix: storageSubnetPrefix
-    webVNETIntegrationSubnetPrefix: webVNETIntegrationSubnetPrefix
-    rdServerSubnetPrefix: rdServerSubnetPrefix
-    avdSubnetPrefix: avdSubnetPrefix
+    vnetAddressPrefix: net_RemoteDesktop_vnetAddressPrefix
+    bastionSubnetPrefix: net_RemoteDesktop_bastionSubnetPrefix
+    webSubnetPrefix: net_RemoteDesktop_webSubnetPrefix
+    appSubnetPrefix: net_RemoteDesktop_appSubnetPrefix
+    dbSubnetPrefix: net_RemoteDesktop_dbSubnetPrefix
+    storageSubnetPrefix: net_RemoteDesktop_storageSubnetPrefix
+    webVNETIntegrationSubnetPrefix: net_RemoteDesktop_webVNETIntegrationSubnetPrefix
+    rdServerSubnetPrefix: net_RemoteDesktop_rdServerSubnetPrefix
+    avdSubnetPrefix: net_RemoteDesktop_avdSubnetPrefix
     vNETDNSServers: vNETDNSServers
-    azureFirewallPrivateIp: azureFirewallPrivateIp
+    azureFirewallPrivateIp: net_hub_azureFirewallPrivateIP
     tags: tags
   }
 }
@@ -116,7 +119,7 @@ module networkingVirtualDesktop '../network/networking_virtualDesktop.bicep' = {
 // Requirement: Bastion in a separate resource group from the hub VNet and VM.
 
 module bastion '../bastion/bastion.bicep' = if (BastionOrAVD == 'Bastion') {
-  name: 'bastion'
+  name: 'bastion_${deploymentTimestamp}'
   scope: bastionRG
   params: {
     location: location
@@ -132,7 +135,7 @@ module bastion '../bastion/bastion.bicep' = if (BastionOrAVD == 'Bastion') {
 // Requirement: VM in a separate resource group from both the hub VNet and Bastion.
 
 module researchVm '../compute/researchvm.bicep' = if (BastionOrAVD == 'Bastion') {
-  name: 'researchVm'
+  name: 'researchVm_${deploymentTimestamp}'
   scope: rdServerVMRG
   params: {
     location: location
@@ -147,7 +150,7 @@ module researchVm '../compute/researchvm.bicep' = if (BastionOrAVD == 'Bastion')
 
 // ── AVD ────────────
 module avd '../avd/avd.bicep' = if (BastionOrAVD == 'AVD') {
-  name: 'avd'
+  name: 'avd_${deploymentTimestamp}'
   scope: avdRG
   params: {
     location: location
@@ -171,4 +174,6 @@ output rdVnetId string = networkingVirtualDesktop.outputs.vnetId
 output rdVnetName string = networkingVirtualDesktop.outputs.vnetName
 
 @description('Azure Bastion Resource ID.')
-output bastionResourceId string = bastion.outputs.bastionId
+output bastionResourceId string = ((BastionOrAVD == 'Bastion')
+  ? bastion!.outputs.bastionId
+  : 'Bastion deployment not selected, no Bastion resource created.')

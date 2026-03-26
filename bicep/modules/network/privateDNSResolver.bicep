@@ -6,6 +6,9 @@ param location string = 'westus2'
 @maxLength(20)
 param environmentName string = 'Dev'
 
+@description('Resource ID of the Virtual Network the Private Resolver will be deployed into.')
+param vnetId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/Dev-RG-Network-01/providers/Microsoft.Network/virtualNetworks/Dev-VNET-Hub-01'
+
 @description('Subnet ID for the Azure Private DNS Resolver Inbound Endpoint.')
 param azDNSPRInboundSubnetId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/Dev-RG-Network-01/providers/Microsoft.Network/virtualNetworks/Dev-VNET-Hub-01/subnets/AzDNSPRInbound01'
 
@@ -20,33 +23,28 @@ param tags object = {
 
 // ── Resources ─────────────────────────────────────────────────────────
 @description('Azure Private DNS Resolver')
-resource privateDNSResolver 'Microsoft.Network/privateDnsResolvers@2025-05-01' = {
+resource privateDNSResolver 'Microsoft.Network/dnsResolvers@2025-05-01' = {
   name: '${environmentName}-DNSPR-Core-01'
   location: location
   tags: tags
   properties: {
-    sku: {
-      name: 'Standard'
+    virtualNetwork: {
+      id: vnetId
     }
   }
 }
 
 @description('Azure Private DNS Resolver Inbound Endpoint')
-resource privateDNSResolverInboundEndpoint 'Microsoft.Network/privateDnsResolvers/inboundEndpoints@2025-05-01' = {
+resource privateDNSResolverInboundEndpoint 'Microsoft.Network/dnsResolvers/inboundEndpoints@2025-05-01' = {
   name: 'IE01'
   parent: privateDNSResolver
   location: location
   properties: {
     ipConfigurations: [
       {
-        name: 'IPConfig01'
-        properties: {
-          subnet: {
-            id: azDNSPRInboundSubnetId
-          }
-          privateIPAddress: azDNSPRInboundStaticIP
-          privateIPAllocationMethod: 'Static'
-        }
+        privateIpAddress: azDNSPRInboundStaticIP
+        privateIpAllocationMethod: 'Static'
+        subnet: { id: azDNSPRInboundSubnetId }
       }
     ]
   }

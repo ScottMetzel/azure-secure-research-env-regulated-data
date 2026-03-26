@@ -18,9 +18,12 @@ param researcherVnetName string = 'researcher-spoke-vnet'
 @description('Resource ID of the Rearcher VNET')
 param researcherVnetId string = ''
 
+@description('The date and time in UTC format. Used as part of the deployment name')
+param deploymentTimestamp string = utcNow()
+
 // ── Resources via Modules ───────────────────────────────────────────────────────────
 module hubtoVirtualDesktopSpokePeering '../network/vnetPeering.bicep' = {
-  name: 'hubtoVirtualDesktopSpokePeering'
+  name: 'hubtoVirtualDesktopSpokePeering_${deploymentTimestamp}'
   scope: resourceGroup(hubVnetRgName)
   params: {
     localVnetName: hubVnetName
@@ -30,7 +33,7 @@ module hubtoVirtualDesktopSpokePeering '../network/vnetPeering.bicep' = {
 }
 
 module hubtoResearcherSpokePeering '../network/vnetPeering.bicep' = {
-  name: 'hubtoResearcherSpokePeering'
+  name: 'hubtoResearcherSpokePeering_${deploymentTimestamp}'
   scope: resourceGroup(hubVnetRgName)
   params: {
     localVnetName: hubVnetName

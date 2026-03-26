@@ -72,6 +72,14 @@ resource hubVNET 'Microsoft.Network/virtualNetworks@2025-05-01' = {
           addressPrefix: azDNSPrivateResolverInboundSubnet
           privateEndpointNetworkPolicies: 'Disabled'
           privateLinkServiceNetworkPolicies: 'Enabled'
+          delegations: [
+            {
+              name: 'AzDNSPRInbound01-Delegation'
+              properties: {
+                serviceName: 'Microsoft.Network/dnsResolvers'
+              }
+            }
+          ]
         }
       }
       {
@@ -81,6 +89,14 @@ resource hubVNET 'Microsoft.Network/virtualNetworks@2025-05-01' = {
           addressPrefix: azDNSPrivateResolverOutboundSubnet
           privateEndpointNetworkPolicies: 'Disabled'
           privateLinkServiceNetworkPolicies: 'Enabled'
+          delegations: [
+            {
+              name: 'AzDNSPROutbound01-Delegation'
+              properties: {
+                serviceName: 'Microsoft.Network/dnsResolvers'
+              }
+            }
+          ]
         }
       }
     ]
@@ -90,16 +106,16 @@ resource hubVNET 'Microsoft.Network/virtualNetworks@2025-05-01' = {
 // ── Outputs ───────────────────────────────────────────────────────────────────
 
 @description('The resource ID of the hub virtual network.')
-output VNETid string = hubVNET.id
+output HubVNETid string = hubVNET.id
 
 @description('The name of the hub virtual network.')
-output VNETName string = hubVNET.name
+output HubVNETName string = hubVNET.name
 
 @description('The resource ID of AzureFirewallSubnet.')
-output firewallSubnetId string = hubVNET.properties.subnets[1].id
+output HubFirewallSubnetId string = hubVNET.properties.subnets[1].id
 
 @description('The resource ID of AzDNSPRInbound01 subnet.')
-output azDNSPRInboundSubnetId string = hubVNET.properties.subnets[2].id
+output HubDNSPRInboundSubnetId string = hubVNET.properties.subnets[2].id
 
 @description('The resource ID of AzDNSPROutbound01 subnet.')
-output azDNSPROutboundSubnetId string = hubVNET.properties.subnets[3].id
+output HubDNSPROutboundSubnetId string = hubVNET.properties.subnets[3].id

@@ -9,22 +9,22 @@ param location string = 'westus2'
 param environmentName string = 'Prod'
 
 @description('Address prefix for the hub virtual network.')
-param hubVNETAddressPrefix string = '10.100.0.0/23'
+param net_hub_vnetAddressPrefix string = '10.100.0.0/23'
 
 @description('Address prefix for the GatewaySubnet (minimum /28).')
-param gatewaySubnetPrefix string = '10.100.0.0/26'
+param net_hub_gatewaySubnetPrefix string = '10.100.0.0/26'
 
 @description('Address prefix for AzureFirewallSubnet (minimum /26).')
-param firewallSubnetPrefix string = '10.100.0.64/26'
+param net_hub_firewallSubnetPrefix string = '10.100.0.64/26'
 
 @description('Address prefix for Azure DNS Private Resolver Inbound Subnet (minimum /28).')
-param azDNSPrivateResolverInboundSubnet string = '10.100.0.128/28'
+param net_hub_azDNSPrivateResolverInboundSubnetPrefix string = '10.100.0.128/28'
 
 @description('Address prefix for Azure DNS Private Resolver Outbound Subnet (minimum /28).')
-param azDNSPrivateResolverOutboundSubnet string = '10.100.0.144/28'
+param net_hub_azDNSPrivateResolverOutboundSubnetPrefix string = '10.100.0.144/28'
 
 @description('Azure DNS Private Resolver Inbound Endpoint Static Private IP Address. Must be within the address range of the AzDNSPRInbound01 subnet defined in the hub virtual network.')
-param azDNSPRInboundStaticIP string = '10.10.10.10'
+param net_hub_azDNSPRInboundStaticIP string = '10.10.10.10'
 
 param privateDnsZoneNamesArray array = [
   'privatelink.vaultcore.azure.net'
@@ -37,6 +37,12 @@ param vNETDNSServers array = [
   '168.63.129.16'
 ]
 
+@description('The private IP address of the Azure Firewall deployed in the hub, used as the next hop for forced tunneling from the Remote Desktop Server subnet.')
+param net_hub_azureFirewallPrivateIP string = '10.100.0.4'
+
+@description('The date and time in UTC format. Used as part of the deployment name')
+param deploymentTimestamp string = utcNow()
+
 @description('Tags applied to every resource.')
 param tags object = {
   WorkloadName: 'SRERD'
@@ -44,11 +50,11 @@ param tags object = {
 }
 
 // ── Variables ───────────────────────────────────────────────────────────
-var firewallPolicyDNSServers = array(azDNSPRInboundStaticIP)
+var firewallPolicyDNSServers = array(net_hub_azDNSPRInboundStaticIP)
 // ── Resource Groups ───────────────────────────────────────────────────────────
 @description('Hub VNET resource group — contains the hub Virtual Network and Firewall.')
 resource hubVNETRG 'Microsoft.Resources/resourceGroups@2023-07-01' = {
-  name: '${environmentName}-RG-NetworkInfrastructure-01'
+  name: '${environmentName}-RG-Network-01'
   location: location
   tags: tags
 }
@@ -76,23 +82,23 @@ resource sentinelRG 'Microsoft.Resources/resourceGroups@2023-07-01' = {
 
 // ── Resources via Modules ───────────────────────────────────────────────────────────
 module hubVNET '../network/networking_hub.bicep' = {
-  name: 'hubVNET'
+  name: 'hubVNET_${deploymentTimestamp}'
   scope: resourceGroup(hubVNETRG.name)
   params: {
     location: location
     environmentName: environmentName
     vNETDNSServers: vNETDNSServers
-    hubVNETAddressPrefix: hubVNETAddressPrefix
-    gatewaySubnetPrefix: gatewaySubnetPrefix
-    firewallSubnetPrefix: firewallSubnetPrefix
-    azDNSPrivateResolverInboundSubnet: azDNSPrivateResolverInboundSubnet
-    azDNSPrivateResolverOutboundSubnet: azDNSPrivateResolverOutboundSubnet
+    hubVNETAddressPrefix: net_hub_vnetAddressPrefix
+    gatewaySubnetPrefix: net_hub_gatewaySubnetPrefix
+    firewallSubnetPrefix: net_hub_firewallSubnetPrefix
+    azDNSPrivateResolverInboundSubnet: net_hub_azDNSPrivateResolverInboundSubnetPrefix
+    azDNSPrivateResolverOutboundSubnet: net_hub_azDNSPrivateResolverOutboundSubnetPrefix
     tags: tags
   }
 }
 
 module logAnalytics '../monitoring/logAnalytics.bicep' = {
-  name: 'logAnalytics'
+  name: 'logAnalytics_${deploymentTimestamp}'
   scope: resourceGroup(sentinelRG.name)
   params: {
     location: location
@@ -104,28 +110,31 @@ module logAnalytics '../monitoring/logAnalytics.bicep' = {
 
 @description('Azure Private DNS Resolver')
 module privateDNSResolver '../network/privateDNSResolver.bicep' = {
-  name: 'privateDNSResolver'
+  name: 'privateDNSResolver_${deploymentTimestamp}'
   scope: resourceGroup(privateDNSResolverRG.name)
   params: {
     location: location
     environmentName: environmentName
     tags: tags
-    azDNSPRInboundSubnetId: hubVNET.outputs.azDNSPRInboundSubnetId
-    azDNSPRInboundStaticIP: azDNSPRInboundStaticIP
+    vnetId: hubVNET.outputs.HubVNETid
+    azDNSPRInboundSubnetId: hubVNET.outputs.HubDNSPRInboundSubnetId
+    azDNSPRInboundStaticIP: net_hub_azDNSPRInboundStaticIP
   }
 }
 
 @description('Azure Firewall Policy and Firewall')
 module firewallandPolicy '../network/firewall.bicep' = {
-  name: 'hubFirewall'
+  name: 'hubFirewall_${deploymentTimestamp}'
   scope: resourceGroup(hubVNETRG.name)
   params: {
     location: location
     environmentName: environmentName
     tags: tags
-    firewallSubnetId: hubVNET.outputs.firewallSubnetId
+    firewallSubnetId: hubVNET.outputs.HubFirewallSubnetId
     logAnalyticsWorkspaceId: logAnalytics.outputs.workspaceResourceId
     dnsServers: firewallPolicyDNSServers
+    net_hub_azDNSPRInboundStaticIP: net_hub_azDNSPRInboundStaticIP
+    net_hub_azureFirewallPrivateIP: net_hub_azureFirewallPrivateIP
   }
 }
 
@@ -133,11 +142,11 @@ module firewallandPolicy '../network/firewall.bicep' = {
 // Creates additional VNet links so the research VM in the hub can resolve
 // private endpoint DNS names (storage, Key Vault, ADF, etc.).
 module hubPrivateDnsZonesAndLinks '../network/privateDNSZonesAndLinks.bicep' = {
-  name: 'hubPrivateDnsZonesAndLinks'
+  name: 'hubPrivateDnsZonesAndLinks_${deploymentTimestamp}'
   scope: resourceGroup(privateDNSZonesRG.name)
   params: {
     location: location
-    vnetId: hubVNET.outputs.VNETid
+    vnetId: hubVNET.outputs.HubVNETid
     privateDnsZoneNamesArray: privateDnsZoneNamesArray
     tags: tags
   }
@@ -175,7 +184,7 @@ output logAnalyticsWorkspaceName string = logAnalytics.outputs.workspaceName
 output hubVNETRGName string = hubVNETRG.name
 
 @description('Hub VNET Resource ID')
-output hubVNETId string = hubVNET.outputs.VNETid
+output hubVNETId string = hubVNET.outputs.HubVNETid
 
 @description('Hub VNET Name')
-output hubVNETName string = hubVNET.outputs.VNETName
+output hubVNETName string = hubVNET.outputs.HubVNETName

@@ -75,8 +75,7 @@ resource dsVms 'Microsoft.Compute/virtualMachines@2023-07-01' = [
         linuxConfiguration: {
           disablePasswordAuthentication: false
           patchSettings: {
-            patchMode: 'AutomaticByPlatform'
-            assessmentMode: 'AutomaticByPlatform'
+            patchMode: 'ImageDefault'
           }
         }
       }
@@ -91,7 +90,7 @@ resource dsVms 'Microsoft.Compute/virtualMachines@2023-07-01' = [
         osDisk: {
           createOption: 'FromImage'
           managedDisk: { storageAccountType: 'Premium_LRS' }
-          diskSizeGB: 128
+          diskSizeGB: 256
           deleteOption: 'Delete'
         }
       }

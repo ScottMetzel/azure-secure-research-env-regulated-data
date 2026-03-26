@@ -21,6 +21,7 @@ param logAnalyticsWorkspaceId string = '/subscriptions/00000000-0000-0000-0000-0
 param keyVaultId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/Dev-RG-Security-01/providers/Microsoft.KeyVault/vaults/dev-kv-01'
 
 @description('Resource ID of the Azure Blob Storage Private DNS Zone.')
+#disable-next-line no-hardcoded-env-urls
 param blobStoragePrivateDnsZoneId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/Dev-RG-Network-01/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.windows.net'
 
 @description('Tags to apply to all resources.')
@@ -113,12 +114,12 @@ resource secureStoragePrivateEndpoint 'Microsoft.Network/privateEndpoints@2023-0
 }
 
 resource secureStorageDnsZoneGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2023-05-01' = {
-  name: 'secureStorageDnsZoneGroup'
+  name: 'default'
   parent: secureStoragePrivateEndpoint
   properties: {
     privateDnsZoneConfigs: [
       {
-        name: 'privatelink-blob-core-windows-net'
+        name: 'privatelink_blob_core_windows_net'
         properties: {
           privateDnsZoneId: blobStoragePrivateDnsZoneId
         }
