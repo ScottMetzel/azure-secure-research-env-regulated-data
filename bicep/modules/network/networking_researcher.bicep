@@ -197,8 +197,8 @@ output DB01SubnetId string = researcherSpokeVNET.properties.subnets[2].id
 @description('The resource ID of the Storage01 subnet.')
 output Storage01SubnetId string = researcherSpokeVNET.properties.subnets[3].id
 
-@description('The resource ID of the Secrets01 subnet.')
-output Secrets01SubnetId string = researcherSpokeVNET.properties.subnets[4].id
+@description('The resource ID of the KeyVault01 subnet.')
+output KeyVault01SubnetId string = researcherSpokeVNET.properties.subnets[4].id
 
 @description('The resource ID of the WebVNETIntegration01 subnet.')
 output WebVNETIntegration01SubnetId string = researcherSpokeVNET.properties.subnets[5].id

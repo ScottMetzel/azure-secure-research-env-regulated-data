@@ -8,23 +8,20 @@ param location string = 'westus2'
 @maxLength(20)
 param environmentName string = 'Prod'
 
-@description('Address prefix for the Researcher Spoke Azure Virtual Network.')
-param net_researcher_vnetAddressPrefix string = '10.100.56.0/21'
+@description('The Resource ID of the Researcher Spoke Virtual Network.')
+param net_researcher_vnetId string = ''
 
-param net_researcher_webSubnetPrefix string = '10.100.56.64/27'
-param net_researcher_appSubnetPrefix string = '10.100.56.96/27'
-param net_researcher_dbSubnetPrefix string = '10.100.56.128/27'
+@description('The resource ID of the App01 subnet.')
+param net_researcher_App01SubnetId string = ''
 
-@description('Address prefix for the storage subnet, used with Azure Storage Accounts and FSLogix.')
-param net_researcher_storageSubnetPrefix string = '10.100.56.160/27'
+@description('The resource ID of the Storage01 subnet.')
+param net_researcher_Storage01SubnetId string = ''
 
-param net_researcher_webVNETIntegrationSubnetPrefix string = '10.100.56.192/27'
+@description('The resource ID of the Key Vault 01 subnet.')
+param net_researcher_KeyVault01SubnetId string = ''
 
-@description('Address prefix for the first Data Science Server subnet.')
-param net_researcher_ServerSubnetPrefix string = '10.100.61.0/28'
-
-@description('The private IP address of the Azure Firewall deployed in the hub, used as the next hop for forced tunneling from the Remote Desktop Server subnet.')
-param net_hub_azureFirewallPrivateIP string = '10.100.0.4'
+@description('The resource ID of the ResearcherVMSubnet01 subnet.')
+param net_researcher_ResearcherVMSubnet01SubnetId string = ''
 
 @description('Local administrator username for VMs.')
 param adminUsername string = 'azureuser'
@@ -60,11 +57,6 @@ param dataFactoryPrivateDnsZoneId string = '/subscriptions/00000000-0000-0000-00
 @description('Resource ID of the Azure ML Private DNS Zone.')
 param azureMLPrivateDnsZoneId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/Dev-RG-Network-01/providers/Microsoft.Network/privateDnsZones/privatelink.azureml.ms'
 
-@description('The string array of DNS servers to use on the Virtual Network.')
-param vNETDNSServers array = [
-  '168.63.129.16'
-]
-
 @description('The date and time in UTC format. Used as part of the deployment name')
 param deploymentTimestamp string = utcNow()
 
@@ -89,32 +81,7 @@ resource researcherRG 'Microsoft.Resources/resourceGroups@2023-07-01' = {
   tags: tags
 }
 
-@description('Spoke VNET resource group — contains the spoke Virtual Network (including Researcher VM subnet, and subnets for resources with Private Endpoints which researchers will access).')
-resource spokeVNETRG 'Microsoft.Resources/resourceGroups@2023-07-01' = {
-  name: '${environmentName}-RG-Network-01'
-  location: location
-  tags: tags
-}
-
 // ── Resources via Modules ───────────────────────────────────────────────────────────
-module researcherNetworking '../network/networking_researcher.bicep' = {
-  name: 'researcherNetworking_${deploymentTimestamp}'
-  scope: spokeVNETRG
-  params: {
-    location: location
-    environmentName: environmentName
-    tags: tags
-    vnetAddressPrefix: net_researcher_vnetAddressPrefix
-    webSubnetPrefix: net_researcher_webSubnetPrefix
-    appSubnetPrefix: net_researcher_appSubnetPrefix
-    dbSubnetPrefix: net_researcher_dbSubnetPrefix
-    storageSubnetPrefix: net_researcher_storageSubnetPrefix
-    webVNETIntegrationSubnetPrefix: net_researcher_webVNETIntegrationSubnetPrefix
-    researcherServerSubnetPrefix: net_researcher_ServerSubnetPrefix
-    vNETDNSServers: vNETDNSServers
-    azureFirewallPrivateIp: net_hub_azureFirewallPrivateIP
-  }
-}
 
 // ── Key Vault (compute-rg, private endpoint in PrivateEndpointSubnet) ─────────
 
@@ -125,8 +92,8 @@ module keyvault '../keyvault/keyvault.bicep' = {
     location: location
     environmentName: environmentName
     tags: tags
-    subnetId: researcherNetworking.outputs.Secrets01SubnetId
-    vnetId: researcherNetworking.outputs.vnetId
+    subnetId: net_researcher_KeyVault01SubnetId
+    vnetId: net_researcher_vnetId
     logAnalyticsWorkspaceId: logAnalyticsWorkspaceId
     keyVaultPrivateDnsZoneId: keyVaultPrivateDnsZoneId // The first zone in the array is the Key Vault zone.
   }
@@ -156,8 +123,8 @@ module storageSecure '../storage/storageSecure.bicep' = {
     location: location
     environmentName: environmentName
     tags: tags
-    subnetId: researcherNetworking.outputs.Storage01SubnetId
-    vnetId: researcherNetworking.outputs.vnetId
+    subnetId: net_researcher_Storage01SubnetId
+    vnetId: net_researcher_vnetId
     logAnalyticsWorkspaceId: logAnalyticsWorkspaceId
     keyVaultId: keyvault.outputs.keyVaultId
     blobStoragePrivateDnsZoneId: blobStoragePrivateDnsZoneId
@@ -173,8 +140,8 @@ module datafactory '../datafactory/datafactory.bicep' = {
     location: location
     environmentName: environmentName
     tags: tags
-    subnetId: researcherNetworking.outputs.App01SubnetId
-    vnetId: researcherNetworking.outputs.vnetId
+    subnetId: net_researcher_App01SubnetId
+    vnetId: net_researcher_vnetId
     logAnalyticsWorkspaceId: logAnalyticsWorkspaceId
     secureStorageAccountId: storageSecure.outputs.storageAccountId
     secureStorageAccountName: storageSecure.outputs.storageAccountName
@@ -206,7 +173,7 @@ module datasciencevm '../compute/datasciencevm.bicep' = {
     location: location
     environmentName: environmentName
     tags: tags
-    subnetId: researcherNetworking.outputs.ResearcherVMSubnet01SubnetId
+    subnetId: net_researcher_ResearcherVMSubnet01SubnetId
     logAnalyticsWorkspaceId: logAnalyticsWorkspaceId
     vmSize: researcherVMSize
     vmCount: researcherVMCount
@@ -234,14 +201,3 @@ module egressApproval '../logicapp/egressApproval.bicep' = {
 }
 
 // ── Outputs ───────────────────────────────────────────────────────────
-@description('The name of the Researcher VNET Resource Group.')
-output researcherVnetResourceGroupName string = spokeVNETRG.name
-
-@description('Researcher VNET ID.')
-output researcherVnetId string = researcherNetworking.outputs.vnetId
-
-@description('Researcher VNET Name.')
-output researcherVnetName string = researcherNetworking.outputs.vnetName
-
-@description('Researcher NSG ID.')
-output researcherNsgId string = researcherNetworking.outputs.nsgId

@@ -6,13 +6,6 @@ param location string = 'westus2'
 @maxLength(20)
 param environmentName string = 'Dev'
 
-@description('Options: Bastion or AVD. Determines whether to deploy Azure Bastion with a virtual machine or Azure Virtual Desktop for remote access to the environment. Default is AVD.')
-@allowed([
-  'Bastion'
-  'AVD'
-])
-param BastionOrAVD string = 'AVD'
-
 @description('Address prefix for the virtual network.')
 param vnetAddressPrefix string = '10.100.40.0/21'
 
