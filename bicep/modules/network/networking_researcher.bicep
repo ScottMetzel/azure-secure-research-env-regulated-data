@@ -1,10 +1,15 @@
 @description('Azure region for all network resources.')
 param location string = 'westus2'
 
-@description('Environment name used as a prefix for resource names.')
-@minLength(1)
-@maxLength(20)
-param environmentName string = 'Dev'
+@description('Short environment name used as a prefix for all resource names.')
+@allowed([
+  'Demo'
+  'Dev'
+  'Test'
+  'Staging'
+  'Prod'
+])
+param environmentName string = 'Prod'
 
 @description('Address prefix for the virtual network.')
 param vnetAddressPrefix string = '10.100.60.0/21'
@@ -51,7 +56,7 @@ resource ResearcherNSG 'Microsoft.Network/networkSecurityGroups@2023-05-01' = {
 // ── Route Tables ──────────────────────────────────────────────────────────────────────
 resource researcherVNETRouteTable 'Microsoft.Network/routeTables@2025-05-01' = {
   location: location
-  name: '${environmentName}-RT-RemoteDesktop-01'
+  name: '${environmentName}-RT-Researcher-01'
   properties: {
     disableBgpRoutePropagation: true
     routes: [

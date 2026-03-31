@@ -1,10 +1,15 @@
 @description('Azure region for the Data Science VMs.')
 param location string = 'westus2'
 
-@description('Environment name used as a prefix for resource names.')
-@minLength(1)
-@maxLength(20)
-param environmentName string = 'Dev'
+@description('Short environment name used as a prefix for all resource names.')
+@allowed([
+  'Demo'
+  'Dev'
+  'Test'
+  'Staging'
+  'Prod'
+])
+param environmentName string = 'Prod'
 
 @description('Resource ID of the subnet for VM NICs.')
 param subnetId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/Dev-RG-Network-01/providers/Microsoft.Network/virtualNetworks/Dev-VNET-DSVM-01/subnets/Dev-Subnet-DSVM'
@@ -34,11 +39,17 @@ param tags object = {
   environment: 'Dev'
 }
 
+// ── Variables ───────────────────────────────────────────────────────────────
+var serverNameBase = 'DSVM'
+var serverNameVM = [for i in range(0, vmCount): '${serverNameBase}${i}']
+var serverOSDiskName = [for i in range(0, vmCount): '${environmentName}-MDK-${serverNameVM[i]}-01']
+var serverNICName = [for i in range(0, vmCount): '${environmentName}-NIC-${serverNameVM[i]}-01']
+
 // ── NICs (no public IP) ───────────────────────────────────────────────────────
 
 resource dsVmNics 'Microsoft.Network/networkInterfaces@2023-05-01' = [
   for i in range(0, vmCount): {
-    name: '${environmentName}-dsvm-nic-${i}'
+    name: serverNICName[i]
     location: location
     tags: tags
     properties: {
@@ -60,7 +71,7 @@ resource dsVmNics 'Microsoft.Network/networkInterfaces@2023-05-01' = [
 
 resource dsVms 'Microsoft.Compute/virtualMachines@2023-07-01' = [
   for i in range(0, vmCount): {
-    name: '${environmentName}-dsvm-${i}'
+    name: serverNameVM[i]
     location: location
     tags: tags
     identity: {
@@ -69,7 +80,7 @@ resource dsVms 'Microsoft.Compute/virtualMachines@2023-07-01' = [
     properties: {
       hardwareProfile: { vmSize: vmSize }
       osProfile: {
-        computerName: 'dsvm-${i}'
+        computerName: serverNameVM[i]
         adminUsername: adminUsername
         adminPassword: adminPassword
         linuxConfiguration: {
@@ -92,6 +103,7 @@ resource dsVms 'Microsoft.Compute/virtualMachines@2023-07-01' = [
           managedDisk: { storageAccountType: 'Premium_LRS' }
           diskSizeGB: 256
           deleteOption: 'Delete'
+          name: serverOSDiskName[i]
         }
       }
       networkProfile: {

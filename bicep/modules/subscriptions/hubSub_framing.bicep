@@ -4,8 +4,13 @@ targetScope = 'subscription'
 param location string = 'westus2'
 
 @description('Short environment name used as a prefix for all resource names.')
-@minLength(1)
-@maxLength(20)
+@allowed([
+  'Demo'
+  'Dev'
+  'Test'
+  'Staging'
+  'Prod'
+])
 param environmentName string = 'Prod'
 
 @description('Hub VNET Resource ID')
@@ -13,6 +18,9 @@ param net_hub_vnetId string = '/subscriptions/00000-0000-0000-0000-000000000000/
 
 @description('Hub VNET Azure Firewall Subnet ID')
 param net_hub_firewallSubnetId string = '/subscriptions/00000-0000-0000-0000-000000000000/resourceGroups/Prod-RG-Network-01/providers/Microsoft.Network/virtualNetworks/Prod-VNET-Hub-01/subnets/AzureFirewallSubnet'
+
+@description('Number of days to retain Azure Firewall logs and metrics in the connected Log Analytics workspace.')
+param PolicyAnalyticsRetentionInDays int = 90
 
 @description('The Resource ID of the Log Analytics Workspace to link for monitoring. This should be the workspace deployed in the hub subscription.')
 param logAnalyticsWorkspaceId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/prod-rg-SOC-01/providers/microsoft.operationalinsights/workspaces/prod-law-soc-01'
@@ -34,6 +42,28 @@ param privateDnsZoneNamesArray array = [
 
 @description('The private IP address of the Azure Firewall deployed in the hub, used as the next hop for forced tunneling from the Remote Desktop Server subnet.')
 param net_hub_azureFirewallPrivateIP string = '10.100.0.4'
+
+@description('The string array of FQDNs needed to allow Azure Machine Configuration to access Microsoft-managed Storage Accounts in Azure. These URLs are used in the Azure Firewall Policy and are region-specific. Default values are for West US 2. Refer to this article for more information:')
+param azureMachineConfigStorageFQDNs array = [
+  #disable-next-line no-hardcoded-env-urls
+  'oaasguestconfigeuss1.blob.core.windows.net'
+  #disable-next-line no-hardcoded-env-urls
+  'oaasguestconfigeus2s1.blob.core.windows.net'
+  #disable-next-line no-hardcoded-env-urls
+  'oaasguestconfigwuss1.blob.core.windows.net'
+  #disable-next-line no-hardcoded-env-urls
+  'oaasguestconfigwus2s1.blob.core.windows.net'
+  #disable-next-line no-hardcoded-env-urls
+  'oaasguestconfigncuss1.blob.core.windows.net'
+  #disable-next-line no-hardcoded-env-urls
+  'oaasguestconfigcuss1.blob.core.windows.net'
+  #disable-next-line no-hardcoded-env-urls
+  'oaasguestconfigscuss1.blob.core.windows.net'
+  #disable-next-line no-hardcoded-env-urls
+  'oaasguestconfigwus3s1.blob.core.windows.net'
+  #disable-next-line no-hardcoded-env-urls
+  'oaasguestconfigwcuss1.blob.core.windows.net'
+]
 
 @description('The date and time in UTC format. Used as part of the deployment name')
 param deploymentTimestamp string = utcNow()
@@ -89,12 +119,14 @@ module firewallandPolicy '../network/firewall.bicep' = {
   params: {
     location: location
     environmentName: environmentName
-    tags: tags
     firewallSubnetId: net_hub_firewallSubnetId
+    PolicyAnalyticsRetentionInDays: PolicyAnalyticsRetentionInDays
     logAnalyticsWorkspaceId: logAnalyticsWorkspaceId
     dnsServers: firewallPolicyDNSServers
     net_hub_azDNSPRInboundStaticIP: net_hub_azDNSPRInboundStaticIP
     net_hub_azureFirewallPrivateIP: net_hub_azureFirewallPrivateIP
+    azureMachineConfigStorageFQDNs: azureMachineConfigStorageFQDNs
+    tags: tags
   }
 }
 

@@ -15,7 +15,7 @@ param remoteVnetId string = '/subscriptions/00000000-0000-0000-0000-000000000000
 @description('Allow forwarded traffic through the peering.')
 param allowForwardedTraffic bool = true
 // ── Variables ───────────────────────────────────────────────────────────────
-var peeringName = '${localVnetName}-to-${remoteVnetName}'
+var peeringName = '${localVnetName}_to_${remoteVnetName}'
 
 // ── Local VNet (existing) ─────────────────────────────────────────────────────
 

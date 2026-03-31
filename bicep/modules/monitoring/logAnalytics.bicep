@@ -1,10 +1,15 @@
 @description('Azure region for the Log Analytics workspace.')
 param location string = 'westus2'
 
-@description('Environment name used as a prefix for resource names.')
-@minLength(1)
-@maxLength(20)
-param environmentName string = 'Dev'
+@description('Short environment name used as a prefix for all resource names.')
+@allowed([
+  'Demo'
+  'Dev'
+  'Test'
+  'Staging'
+  'Prod'
+])
+param environmentName string = 'Prod'
 
 @description('The name of the Log Analytics Workspace to create.')
 param workspaceName string = '${environmentName}-LAW-SOC-01'

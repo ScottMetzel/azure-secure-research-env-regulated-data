@@ -1,13 +1,21 @@
 @description('Azure region for the Azure Firewall.')
 param location string = 'westus2'
 
-@description('Environment name used as a prefix for resource names.')
-@minLength(1)
-@maxLength(20)
-param environmentName string = 'Dev'
+@description('Short environment name used as a prefix for all resource names.')
+@allowed([
+  'Demo'
+  'Dev'
+  'Test'
+  'Staging'
+  'Prod'
+])
+param environmentName string = 'Prod'
 
 @description('Resource ID of AzureFirewallSubnet (must be named exactly AzureFirewallSubnet).')
 param firewallSubnetId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/Dev-RG-Network-01/providers/Microsoft.Network/virtualNetworks/Dev-VNET-Hub-01/subnets/AzureFirewallSubnet'
+
+@description('Number of days to retain Azure Firewall logs and metrics in the connected Log Analytics workspace.')
+param PolicyAnalyticsRetentionInDays int = 90
 
 @description('Resource ID of the Log Analytics workspace for diagnostics.')
 param logAnalyticsWorkspaceId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/prod-rg-SOC-01/providers/microsoft.operationalinsights/workspaces/prod-law-soc-01'
@@ -32,14 +40,37 @@ param net_hub_azDNSPRInboundStaticIP string = '10.10.10.10'
 @description('The private IP address of the Azure Firewall deployed in the hub, used as the next hop for forced tunneling from the Remote Desktop Server subnet.')
 param net_hub_azureFirewallPrivateIP string = '10.100.0.4'
 
+@description('The string array of FQDNs needed to allow Azure Machine Configuration to access Microsoft-managed Storage Accounts in Azure. These URLs are used in the Azure Firewall Policy and are region-specific. Default values are for West US 2. Refer to this article for more information:')
+param azureMachineConfigStorageFQDNs array = [
+  #disable-next-line no-hardcoded-env-urls
+  'oaasguestconfigeuss1.blob.core.windows.net'
+  #disable-next-line no-hardcoded-env-urls
+  'oaasguestconfigeus2s1.blob.core.windows.net'
+  #disable-next-line no-hardcoded-env-urls
+  'oaasguestconfigwuss1.blob.core.windows.net'
+  #disable-next-line no-hardcoded-env-urls
+  'oaasguestconfigwus2s1.blob.core.windows.net'
+  #disable-next-line no-hardcoded-env-urls
+  'oaasguestconfigncuss1.blob.core.windows.net'
+  #disable-next-line no-hardcoded-env-urls
+  'oaasguestconfigcuss1.blob.core.windows.net'
+  #disable-next-line no-hardcoded-env-urls
+  'oaasguestconfigscuss1.blob.core.windows.net'
+  #disable-next-line no-hardcoded-env-urls
+  'oaasguestconfigwus3s1.blob.core.windows.net'
+  #disable-next-line no-hardcoded-env-urls
+  'oaasguestconfigwcuss1.blob.core.windows.net'
+]
+
 @description('Tags to apply to all resources.')
 param tags object = {
   workloadName: 'SRERD'
   environment: 'Dev'
 }
+// ── Variables ─────────────────────────────────────────────────────────────────
+var azureMachineConfigFQDNs = concat(azureMachineConfigStorageFQDNs, ['*.guestconfiguration.azure.com'])
 
 // ── Public IP ─────────────────────────────────────────────────────────────────
-
 resource firewallPublicIp 'Microsoft.Network/publicIPAddresses@2024-05-01' = {
   name: '${environmentName}-PIP-AzureFirewall-01'
   location: location
@@ -54,6 +85,7 @@ resource firewallPublicIp 'Microsoft.Network/publicIPAddresses@2024-05-01' = {
     publicIPAddressVersion: 'IPv4'
   }
 }
+
 // ── IP Groups ───────────────────────────────────────────────────────────
 resource ipgPrivateNetworks 'Microsoft.Network/ipGroups@2024-05-01' = {
   name: '${environmentName}-IPG-PrivateNetworks-01'
@@ -102,11 +134,19 @@ resource firewallPolicy 'Microsoft.Network/firewallPolicies@2024-05-01' = {
       enableProxy: true
       servers: dnsServers
     }
+    insights: {
+      isEnabled: true
+      logAnalyticsResources: {
+        defaultWorkspaceId: {
+          id: logAnalyticsWorkspaceId
+        }
+      }
+      retentionDays: PolicyAnalyticsRetentionInDays
+    }
   }
 }
 
 // ── Firewall Policy Rule Collection Groups ─────────────────────────────────────
-
 resource fwPolicyRCGGlobalAzurePlatform 'Microsoft.Network/firewallPolicies/ruleCollectionGroups@2024-05-01' = {
   name: 'Azure-Platform'
   parent: firewallPolicy
@@ -138,6 +178,23 @@ resource fwPolicyRCGGlobalAzurePlatform 'Microsoft.Network/firewallPolicies/rule
               '53'
               '80'
               '32526'
+            ]
+          }
+          {
+            ruleType: 'NetworkRule'
+            name: 'Azure-NTP_Allow'
+            description: 'Allow outbound NTP traffic to time.windows.com.'
+            sourceIpGroups: [
+              ipgPrivateNetworks.id
+            ]
+            destinationFqdns: [
+              'time.windows.com'
+            ]
+            ipProtocols: [
+              'UDP'
+            ]
+            destinationPorts: [
+              '123'
             ]
           }
           {
@@ -333,16 +390,94 @@ resource fwPolicyRCGGlobalAzurePlatform 'Microsoft.Network/firewallPolicies/rule
           }
           {
             ruleType: 'ApplicationRule'
+            name: 'Azure-Machine-Configuration_Allow'
+            description: 'Allow outbound traffic to Azure Machine Configuration endpoints for diagnostics and telemetry.'
+            protocols: [
+              { protocolType: 'Https', port: 443 }
+            ]
+            targetFqdns: azureMachineConfigFQDNs
+            sourceIpGroups: [
+              ipgPrivateNetworks.id
+            ]
+          }
+          {
+            ruleType: 'ApplicationRule'
             name: 'Microsoft-Update_Allow'
             description: 'Allow Windows Update traffic for patch management.'
             protocols: [
               { protocolType: 'Https', port: 443 }
             ]
             targetFqdns: [
+              '*.delivery.mp.microsoft.com'
+              '*.download.windowsupdate.com'
               '*.update.microsoft.com'
               '*.windowsupdate.com'
-              '*.download.windowsupdate.com'
+            ]
+            sourceIpGroups: [
+              ipgPrivateNetworks.id
+            ]
+          }
+          {
+            ruleType: 'ApplicationRule'
+            name: 'Microsoft-CRLs_Allow'
+            description: 'Allow CRL Check traffic for certificate validation.'
+            protocols: [
+              { protocolType: 'Http', port: 80 }
+            ]
+            targetFqdns: [
+              'www.microsoft.com'
+              'ctldl.windowsupdate.com'
+              'crl.microsoft.com'
+              'packages.microsoft.com'
+              'download.windowsupdate.com'
+            ]
+            sourceIpGroups: [
+              ipgPrivateNetworks.id
+            ]
+          }
+          {
+            ruleType: 'ApplicationRule'
+            name: 'Windows-Autopatch_Allow'
+            description: 'Allow Windows Autopatch traffic for patch management.'
+            protocols: [
+              { protocolType: 'Https', port: 443 }
+            ]
+            targetFqdns: [
+              '*.webpubsub.azure.com'
+              'device.autopatch.microsoft.com'
+              'devicelistenerprod.microsoft.com'
+              'login.windows.net'
+              'mmdcustomer.microsoft.com'
+              'mmdls.microsoft.com'
+              'services.autopatch.microsoft.com'
+            ]
+            sourceIpGroups: [
+              ipgPrivateNetworks.id
+            ]
+          }
+          {
+            ruleType: 'ApplicationRule'
+            name: 'Defender-for-Endpoint_Allow'
+            description: 'Allow Microsoft Defender for Endpoint traffic for security management.'
+            protocols: [
+              { protocolType: 'Https', port: 443 }
+            ]
+            targetFqdns: [
               '*.delivery.mp.microsoft.com'
+              '*.endpoint.security.microsoft.com'
+              '*.security.microsoft.com'
+              '*.smartscreen-prod.microsoft.com'
+              '*.smartscreen.microsoft.com'
+              '*.update.microsoft.com'
+              '*.windowsupdate.com'
+              'config.edge.skype.com'
+              'download.microsoft.com'
+              'download.windowsupdate.com'
+              #disable-next-line no-hardcoded-env-urls
+              'login.microsoftonline.com'
+              'login.windows.net'
+              'packages.microsoft.com'
+              'www.microsoft.com'
             ]
             sourceIpGroups: [
               ipgPrivateNetworks.id
@@ -361,6 +496,7 @@ resource fwPolicyRCGGlobalAzurePlatform 'Microsoft.Network/firewallPolicies/rule
               'login.windows.net'
               #disable-next-line no-hardcoded-env-urls
               '*.login.microsoftonline.com'
+              'go.microsoft.com'
             ]
             sourceIpGroups: [
               ipgPrivateNetworks.id
@@ -375,6 +511,9 @@ resource fwPolicyRCGGlobalAzurePlatform 'Microsoft.Network/firewallPolicies/rule
 resource fwPolicyRCGGlobalInternal 'Microsoft.Network/firewallPolicies/ruleCollectionGroups@2024-05-01' = {
   name: '${tags.WorkloadName}-Global_Internal'
   parent: firewallPolicy
+  dependsOn: [
+    fwPolicyRCGGlobalAzurePlatform
+  ]
   properties: {
     priority: 1010
     ruleCollections: [
@@ -412,6 +551,10 @@ resource fwPolicyRCGGlobalInternal 'Microsoft.Network/firewallPolicies/ruleColle
 resource fwPolicyRCGInternal 'Microsoft.Network/firewallPolicies/ruleCollectionGroups@2024-05-01' = {
   name: '${tags.WorkloadName}-Researcher_Internal-and-Internet'
   parent: firewallPolicy
+  dependsOn: [
+    fwPolicyRCGGlobalAzurePlatform
+    fwPolicyRCGGlobalInternal
+  ]
   properties: {
     priority: 1500
     ruleCollections: [
@@ -453,23 +596,46 @@ resource fwPolicyRCGInternal 'Microsoft.Network/firewallPolicies/ruleCollectionG
         rules: [
           {
             ruleType: 'ApplicationRule'
-            name: 'Internet-TCP-443-01_Allow'
+            name: 'Internet-HTTPS-01_Allow'
             description: 'Allow HTTPS traffic from the Researcher VM to the Internet.'
             sourceAddresses: [
               net_researcher_ServerSubnetPrefix
             ]
             targetFqdns: [
+              'api.snapcraft.io'
               'archive.ubuntu.com'
+              'azure.archive.ubuntu.com'
               'cloud.r-project.org'
               'developer.download.nvidia.com'
+              'esm.ubuntu.com'
+              'md-mqhk0tk55mfx.z30.blob.storage.azure.net'
+              'motd.ubuntu.com'
               'nvidia.github.io'
               'packages.microsoft.com'
               'ppa.launchpadcontent.net'
               'repo.scala-sbt.org'
+              'scala.jfrog.io'
               'security.ubuntu.com'
+              #disable-next-line no-hardcoded-env-urls
+              'umsar1tzn12qbbhwwgmw.blob.core.windows.net'
             ]
             protocols: [
-              { port: 443, protocolType: 'Https' }
+              { protocolType: 'Https', port: 443 }
+            ]
+          }
+          {
+            ruleType: 'ApplicationRule'
+            name: 'Internet-HTTP-01_Allow'
+            description: 'Allow HTTP traffic from the Researcher VM to the Internet.'
+            sourceAddresses: [
+              net_researcher_ServerSubnetPrefix
+            ]
+            targetFqdns: [
+              'azure.archive.ubuntu.com'
+              'packages.microsoft.com'
+            ]
+            protocols: [
+              { protocolType: 'Http', port: 80 }
             ]
           }
         ]
@@ -483,7 +649,6 @@ resource firewall 'Microsoft.Network/azureFirewalls@2024-05-01' = {
   name: '${environmentName}-AFW-Core-01'
   location: location
   tags: tags
-  zones: ['1', '2', '3']
   properties: {
     sku: {
       name: 'AZFW_VNet'
@@ -510,7 +675,7 @@ resource firewall 'Microsoft.Network/azureFirewalls@2024-05-01' = {
 // ── Diagnostics ───────────────────────────────────────────────────────────────
 
 resource firewallDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-preview' = {
-  name: '${environmentName}-fw-diag'
+  name: 'FirewallPolicySettings'
   scope: firewall
   properties: {
     workspaceId: logAnalyticsWorkspaceId
@@ -520,12 +685,7 @@ resource firewallDiagnostics 'Microsoft.Insights/diagnosticSettings@2021-05-01-p
         enabled: true
       }
     ]
-    metrics: [
-      {
-        category: 'AllMetrics'
-        enabled: true
-      }
-    ]
+    logAnalyticsDestinationType: 'Dedicated'
   }
 }
 

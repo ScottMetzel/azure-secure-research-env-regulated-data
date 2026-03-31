@@ -4,8 +4,13 @@ targetScope = 'subscription'
 param location string = 'westus2'
 
 @description('Short environment name used as a prefix for all resource names.')
-@minLength(1)
-@maxLength(20)
+@allowed([
+  'Demo'
+  'Dev'
+  'Test'
+  'Staging'
+  'Prod'
+])
 param environmentName string = 'Prod'
 
 @description('Local administrator username for VMs.')
@@ -82,21 +87,20 @@ module bastion '../bastion/bastion.bicep' = if (BastionOrAVD == 'Bastion') {
   }
 }
 
-// ── Research VM ────────────
+// ── Remote Desktop VM ────────────
 // Gen2 D4ds_v5 Windows Server 2025 Azure Edition VM — accessed via Azure Bastion.
 // Requirement: VM in a separate resource group from both the hub VNet and Bastion.
 
-module researchVm '../compute/researchvm.bicep' = if (BastionOrAVD == 'Bastion') {
-  name: 'researchVm_${deploymentTimestamp}'
+module remoteDesktopVM '../compute/remoteDesktopVM.bicep' = if (BastionOrAVD == 'Bastion') {
+  name: 'remoteDesktopVM_${deploymentTimestamp}'
   scope: rdServerVMRG
   params: {
     location: location
     environmentName: environmentName
-    tags: tags
     subnetId: net_RemoteDesktop_rdServerSubnetId
-    logAnalyticsWorkspaceId: logAnalyticsWorkspaceId
     adminUsername: adminUsername
     adminPassword: adminPassword
+    tags: tags
   }
 }
 
@@ -107,11 +111,11 @@ module avd '../avd/avd.bicep' = if (BastionOrAVD == 'AVD') {
   params: {
     location: location
     environmentName: environmentName
-    tags: tags
     subnetId: net_RemoteDesktop_avdSubnetId
     logAnalyticsWorkspaceId: logAnalyticsWorkspaceId
     adminUsername: adminUsername
     adminPassword: adminPassword
+    tags: tags
   }
 }
 

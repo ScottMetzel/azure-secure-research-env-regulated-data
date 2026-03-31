@@ -7,6 +7,7 @@ param location string = 'westus2'
 
 @description('Short environment name used as a prefix for all resource names.')
 @allowed([
+  'Demo'
   'Dev'
   'Test'
   'Staging'
@@ -33,6 +34,9 @@ param adminPassword string = ''
   'AVD'
 ])
 param BastionOrAVD string = 'Bastion'
+
+@description('Number of days to retain Azure Firewall logs and metrics in the connected Log Analytics workspace.')
+param PolicyAnalyticsRetentionInDays int = 90
 
 @description('Subscription ID where the research environment will be deployed. Used for cross-subscription resource deployments and role assignments.')
 @minLength(36)
@@ -67,6 +71,28 @@ param privateDnsZoneNames array = [
   'privatelink.vaultcore.azure.net'
   'privatelink.datafactory.azure.net'
   'privatelink.azureml.ms'
+]
+
+@description('The string array of FQDNs needed to allow Azure Machine Configuration to access Microsoft-managed Storage Accounts in Azure. These URLs are used in the Azure Firewall Policy and are region-specific. Default values are for West US 2. Refer to this article for more information:')
+param azureMachineConfigStorageFQDNs array = [
+  #disable-next-line no-hardcoded-env-urls
+  'oaasguestconfigeuss1.blob.core.windows.net'
+  #disable-next-line no-hardcoded-env-urls
+  'oaasguestconfigeus2s1.blob.core.windows.net'
+  #disable-next-line no-hardcoded-env-urls
+  'oaasguestconfigwuss1.blob.core.windows.net'
+  #disable-next-line no-hardcoded-env-urls
+  'oaasguestconfigwus2s1.blob.core.windows.net'
+  #disable-next-line no-hardcoded-env-urls
+  'oaasguestconfigncuss1.blob.core.windows.net'
+  #disable-next-line no-hardcoded-env-urls
+  'oaasguestconfigcuss1.blob.core.windows.net'
+  #disable-next-line no-hardcoded-env-urls
+  'oaasguestconfigscuss1.blob.core.windows.net'
+  #disable-next-line no-hardcoded-env-urls
+  'oaasguestconfigwus3s1.blob.core.windows.net'
+  #disable-next-line no-hardcoded-env-urls
+  'oaasguestconfigwcuss1.blob.core.windows.net'
 ]
 
 // ── Hub VNET Parameters ───────────────────────────────────────────────────────────
@@ -251,6 +277,7 @@ module hubSub_framing 'modules/subscriptions/hubSub_framing.bicep' = {
     environmentName: environmentName
     net_hub_vnetId: hubSub_foundation.outputs.hubVNETId
     net_hub_firewallSubnetId: hubSub_foundation.outputs.hubVNETFirewallSubnetId
+    PolicyAnalyticsRetentionInDays: PolicyAnalyticsRetentionInDays
     logAnalyticsWorkspaceId: hubSub_foundation.outputs.logAnalyticsWorkspaceResourceId
     remoteDesktopVnetId: virtualDesktopSub_foundation.outputs.rdVnetId
     researcherVnetId: researcherSub_foundation.outputs.researcherVnetId
@@ -258,6 +285,7 @@ module hubSub_framing 'modules/subscriptions/hubSub_framing.bicep' = {
     privateDnsZoneNamesArray: privateDnsZoneNamesArray
     net_hub_azureFirewallPrivateIP: net_hub_azureFirewallPrivateIP
     deploymentTimestamp: deploymentTimestamp
+    azureMachineConfigStorageFQDNs: azureMachineConfigStorageFQDNs
     tags: tags
   }
 }
@@ -306,6 +334,7 @@ module hubSub_workload 'modules/subscriptions/hubSub_workload.bicep' = {
 module virtualDesktopSub_workload 'modules/subscriptions/virtualDesktopSub_workload.bicep' = {
   name: 'virtualDesktopSub_workload_${deploymentTimestamp}'
   scope: subscription(virtualDesktopSubscriptionID)
+  dependsOn: [hubSub_workload, hubSub_framing]
   params: {
     location: location
     environmentName: environmentName
@@ -325,6 +354,8 @@ module virtualDesktopSub_workload 'modules/subscriptions/virtualDesktopSub_workl
 module researcherSub_workload 'modules/subscriptions/researcherSub_workload.bicep' = {
   name: 'researcherSub_workload_${deploymentTimestamp}'
   scope: subscription(researcherSubscriptionID)
+  #disable-next-line no-unnecessary-dependson
+  dependsOn: [hubSub_workload, hubSub_framing]
   params: {
     location: location
     environmentName: environmentName

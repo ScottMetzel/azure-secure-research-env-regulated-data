@@ -1,9 +1,14 @@
 @description('Azure region for AVD resources.')
 param location string = 'westus2'
 
-@description('Environment name used as a prefix for resource names.')
-@minLength(1)
-@maxLength(20)
+@description('Short environment name used as a prefix for all resource names.')
+@allowed([
+  'Demo'
+  'Dev'
+  'Test'
+  'Staging'
+  'Prod'
+])
 param environmentName string = 'Prod'
 
 @description('Resource ID of the subnet for session host NICs.')

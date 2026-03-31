@@ -4,8 +4,13 @@ targetScope = 'subscription'
 param location string = 'westus2'
 
 @description('Short environment name used as a prefix for all resource names.')
-@minLength(1)
-@maxLength(20)
+@allowed([
+  'Demo'
+  'Dev'
+  'Test'
+  'Staging'
+  'Prod'
+])
 param environmentName string = 'Prod'
 
 @description('The Resource ID of the Researcher Spoke Virtual Network.')

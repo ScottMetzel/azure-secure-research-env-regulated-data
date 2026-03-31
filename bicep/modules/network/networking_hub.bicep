@@ -1,10 +1,15 @@
 @description('Azure region for all hub network resources.')
 param location string = 'westus2'
 
-@description('Environment name used as a prefix for resource names.')
-@minLength(1)
-@maxLength(20)
-param environmentName string = 'Dev'
+@description('Short environment name used as a prefix for all resource names.')
+@allowed([
+  'Demo'
+  'Dev'
+  'Test'
+  'Staging'
+  'Prod'
+])
+param environmentName string = 'Prod'
 
 @description('Address prefix for the hub virtual network.')
 param hubVNETAddressPrefix string = '10.100.0.0/23'
@@ -31,7 +36,16 @@ param tags object = {
   workloadName: 'SRERD'
   environment: 'Dev'
 }
+// ── NSGs ──────────────────────────────────────────────────────────────────────
 
+resource DNSPrivateResolverNSG 'Microsoft.Network/networkSecurityGroups@2023-05-01' = {
+  name: '${environmentName}-NSG-DNSPrivateResolver-01'
+  location: location
+  tags: tags
+  properties: {
+    securityRules: []
+  }
+}
 // ── Hub Virtual Network ───────────────────────────────────────────────────────
 // AzureFirewallSubnet and AzureBastionSubnet are reserved names required by Azure.
 
@@ -80,6 +94,9 @@ resource hubVNET 'Microsoft.Network/virtualNetworks@2025-05-01' = {
               }
             }
           ]
+          networkSecurityGroup: {
+            id: DNSPrivateResolverNSG.id
+          }
         }
       }
       {
@@ -97,6 +114,9 @@ resource hubVNET 'Microsoft.Network/virtualNetworks@2025-05-01' = {
               }
             }
           ]
+          networkSecurityGroup: {
+            id: DNSPrivateResolverNSG.id
+          }
         }
       }
     ]
