@@ -41,33 +41,44 @@ bicep/
 ├── main.bicep               Subscription-scoped orchestrator
 ├── main.bicepparam          Example parameter values
 └── modules/
-    ├── monitoring/
-    │   └── logAnalytics.bicep          Log Analytics workspace
-    ├── network/
-    │   ├── hubvnet.bicep               Hub VNet (Firewall + Bastion + Research subnets)
-    │   ├── vnet.bicep                  Spoke VNet (Compute + PE + DataIntegration subnets)
-    │   ├── vnetPeering.bicep           Single-direction VNet peering (deploy ×2)
-    │   ├── dnsZoneLinks.bicep          Add VNet links to existing private DNS zones
-    │   ├── firewall.bicep              Azure Firewall + Policy
+    ├── avd/
+    │   └── avd.bicep                           Azure Virtual Desktop pool + host (deployed to virtual desktop Sub)
     ├── bastion/
-    │   └── bastion.bicep               Azure Bastion Standard
+    │   └── bastion.bicep                       Azure Bastion (deployed to virtual desktop Sub)
     ├── compute/
-    │   ├── researchvm.bicep            Gen2 D4ds_v5 WS2025 Azure Edition jumpbox VM
-    │   └── datasciencevm.bicep         Ubuntu 22.04 DSVM(s)
-    ├── keyvault/
-    │   └── keyvault.bicep              Key Vault (RBAC, private endpoint, purge protection)
-    ├── storage/
-    │   ├── storageIngestion.bicep      Publicly-accessible ingestion storage
-    │   └── storageSecure.bicep         Private immutable research-data storage
+    │   ├── researchvm.bicep                    Gen2 D4ds_v5 WS2025 Azure Edition jumpbox VM (deployed to virtual desktop Sub)
+    │   └── datasciencevm.bicep                 Ubuntu 22.04 VM(s) which use the Data Science image from the Azure Marketplace
     ├── datafactory/
-    │   └── datafactory.bicep           ADF with managed VNet and private endpoint
+    │   └── datafactory.bicep                   Azure Data Factory with managed VNET and private endpoint
+    ├── keyvault/
+    │   └── keyvault.bicep                      Key Vault (RBAC, private endpoint, purge protection)
     ├── logicapp/
-    │   └── egressApproval.bicep        HTTP-webhook egress approval Logic App
+    │   └── egressApproval.bicep                HTTP-webhook egress approval Logic App
+    ├── monitoring/
+    │   └── logAnalytics.bicep                  Log Analytics Workspace + Sentinel instance (deployed to Hub Sub)
+    ├── network/
+    │   ├── firewall.bicep                      Azure Firewall + Policy (Linked to Hub VNET)
+    │   ├── networking_hub.bicep                Hub VNET + NSGs
+    │   ├── networking_researcher.bicep         Spoke VNET + NSGs for the Researcher sub (Data Science VMs, secure storage, ADF, and the like)
+    │   ├── networking_virtualDesktop.bicep     Spoke VNET + NSGs for the AVD / Bastion + Remote Desktop VM
+    │   ├── privateDNSResolver.bicep            Private DNS Resolver (with endpoints associated to VNET Hub)
+    │   ├── privateDNSZonesAndLinks.bicep       Private DNS Zones and Virtual Network Links (with Internet Fallback enabled)
+    │   ├── vnetPeering.bicep                   Single-direction VNET peering (deployed once-per spoke-to-hub and n times per hub-to-spoke peering)
     └── roleAssignment/
-        └── roleAssignment.bicep        RG-scoped RBAC role assignment helper
-```
-
----
+    │   └── roleAssignment.bicep                RG-scoped RBAC role assignment helper
+    ├── storage/
+    │   ├── storageIngestion.bicep              Publicly-accessible ingestion storage
+    │   └── storageSecure.bicep                 Private immutable research-data storage
+    └── subscriptions/
+        └── hubSub_foundation.bicep             Resource Groups and networking (Hub VNET) in the Hub Sub
+        └── hubSub_framing.bicep                Private DNS Zones, Firewall, and VNET Peerings in the Hub Sub
+        └── hubSub_workload.Bicep               DNS Resolver deployment in the Hub Sub
+        └── researcherSub_foundation.bicep      Resource Groups and networking (Spoke VNET) in the Researcher Sub
+        └── researcherSub_framing.bicep         Spoke-to-Hub VNET Peering in the Researcher Sub
+        └── researcherSub_workload.bicep        Data Science VM, Secure and Public storage accounts, Logic App, and ADF in the Researcher Sub
+        └── virtualDesktopSub_foundation.bicep  Resource Group for Networking and Networking (Spoke VNET) in the Remote Desktop Sub
+        └── virtualDesktopSub_framing.bicep     Spoke-to-Hub VNET Peering in the Remote Desktop Sub
+        └── virtualDesktopSub_workload.bicep    Resource Groups and AVD or Bastion + Remote Desktop VM in the Remote Desktop Sub
 
 ## Deployment
 
