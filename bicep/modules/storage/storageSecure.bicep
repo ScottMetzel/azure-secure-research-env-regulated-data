@@ -41,6 +41,8 @@ var storageAccountName = toLower(take(
   24
 ))
 
+var storageAccountPrivateEndpointName = '${environmentName}-PE-${storageAccountName}-01'
+
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {
   name: storageAccountName
   location: location
@@ -101,7 +103,7 @@ resource immutabilityPolicy 'Microsoft.Storage/storageAccounts/blobServices/cont
 // ── Private Endpoint ──────────────────────────────────────────────────────────
 
 resource secureStoragePrivateEndpoint 'Microsoft.Network/privateEndpoints@2023-05-01' = {
-  name: '${environmentName}-secure-storage-pe'
+  name: storageAccountPrivateEndpointName
   location: location
   tags: tags
   properties: {
