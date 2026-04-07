@@ -41,9 +41,10 @@ param tags object = {
 
 // ── Variables ───────────────────────────────────────────────────────────────
 var serverNameBase = 'DSVM'
-var serverNameVM = [for i in range(0, vmCount): '${serverNameBase}${i}']
-var serverOSDiskName = [for i in range(0, vmCount): '${environmentName}-MDK-${serverNameVM[i]}-01']
-var serverNICName = [for i in range(0, vmCount): '${environmentName}-NIC-${serverNameVM[i]}-01']
+var baseSequenceNumbersFormatted = [for i in range(0, vmCount): '${format('{0:000}', i)}']
+var serverNames = [for i in range(0, vmCount): '${serverNameBase}${baseSequenceNumbersFormatted[i]}']
+var serverOSDiskName = [for i in range(0, vmCount): '${environmentName}-MDK-${serverNames[i]}-01']
+var serverNICName = [for i in range(0, vmCount): '${environmentName}-NIC-${serverNames[i]}-01']
 
 // ── NICs (no public IP) ───────────────────────────────────────────────────────
 
@@ -71,7 +72,7 @@ resource dsVmNics 'Microsoft.Network/networkInterfaces@2023-05-01' = [
 
 resource dsVms 'Microsoft.Compute/virtualMachines@2023-07-01' = [
   for i in range(0, vmCount): {
-    name: serverNameVM[i]
+    name: serverNames[i]
     location: location
     tags: tags
     identity: {
@@ -80,7 +81,7 @@ resource dsVms 'Microsoft.Compute/virtualMachines@2023-07-01' = [
     properties: {
       hardwareProfile: { vmSize: vmSize }
       osProfile: {
-        computerName: serverNameVM[i]
+        computerName: serverNames[i]
         adminUsername: adminUsername
         adminPassword: adminPassword
         linuxConfiguration: {
@@ -154,9 +155,17 @@ resource amaExtensions 'Microsoft.Compute/virtualMachines/extensions@2023-07-01'
 ]
 
 // ── Outputs ───────────────────────────────────────────────────────────────────
+@description('String array of base sequence numbers from variable "baseSequenceNumbersFormatted". Used for VM naming and other purposes.')
+output baseSequenceNumbersFormatted array = baseSequenceNumbersFormatted
+
+@description('Array of VM names from variable "serverNames". Used for outputs and other purposes.')
+output serverNames array = serverNames
+
+@description('Array of OS disk names from variable "serverOSDiskName". Used for outputs and other purposes.')
+output serverOSDiskNames array = serverOSDiskName
+
+@description('Array of NIC names from variable "serverNICName". Used for outputs and other purposes.')
+output serverNICNames array = serverNICName
 
 @description('Array of resource IDs for the Data Science VMs.')
 output vmIds array = [for i in range(0, vmCount): dsVms[i].id]
-
-@description('Array of names for the Data Science VMs.')
-output vmNames array = [for i in range(0, vmCount): dsVms[i].name]
