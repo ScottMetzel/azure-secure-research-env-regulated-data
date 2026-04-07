@@ -1,31 +1,47 @@
 @description('Azure region for the secure storage account.')
-param location string
+param location string = 'westus2'
 
-@description('Environment name used as a prefix for resource names.')
-@minLength(1)
-@maxLength(20)
-param environmentName string
-
-@description('Tags to apply to all resources.')
-param tags object
+@description('Short environment name used as a prefix for all resource names.')
+@allowed([
+  'Demo'
+  'Dev'
+  'Test'
+  'Staging'
+  'Prod'
+])
+param environmentName string = 'Prod'
 
 @description('Resource ID of the subnet where the private endpoint will be placed.')
-param subnetId string
+param subnetId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/Dev-RG-Network-01/providers/Microsoft.Network/virtualNetworks/Dev-VNET-Hub-01/subnets/Dev-Subnet-Security-01'
 
 @description('Resource ID of the VNet. Reserved for future use (e.g. additional DNS zone links).')
 #disable-next-line no-unused-params
-param vnetId string
+param vnetId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/Dev-RG-Network-01/providers/Microsoft.Network/virtualNetworks/Dev-VNET-Hub-01'
 
 @description('Resource ID of the Log Analytics workspace for diagnostics.')
-param logAnalyticsWorkspaceId string
+param logAnalyticsWorkspaceId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/prod-rg-SOC-01/providers/microsoft.operationalinsights/workspaces/prod-law-soc-01'
 
 @description('Optional resource ID of a Key Vault for customer-managed keys. Leave empty to use Microsoft-managed keys.')
 #disable-next-line no-unused-params
-param keyVaultId string = ''
+param keyVaultId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/Dev-RG-Security-01/providers/Microsoft.KeyVault/vaults/dev-kv-01'
 
+@description('Resource ID of the Azure Blob Storage Private DNS Zone.')
+#disable-next-line no-hardcoded-env-urls
+param blobStoragePrivateDnsZoneId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/Dev-RG-Network-01/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.windows.net'
+
+@description('Tags to apply to all resources.')
+param tags object = {
+  workloadName: 'SRERD'
+  environment: 'Dev'
+}
 // ── Storage Account ───────────────────────────────────────────────────────────
 
-var storageAccountName = toLower(take('${replace(environmentName, '-', '')}secure${uniqueString(resourceGroup().id)}', 24))
+var storageAccountName = toLower(take(
+  '${replace(environmentName, '-', '')}secure${uniqueString(resourceGroup().id)}',
+  24
+))
+
+var storageAccountPrivateEndpointName = '${environmentName}-PE-${storageAccountName}-01'
 
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {
   name: storageAccountName
@@ -84,18 +100,10 @@ resource immutabilityPolicy 'Microsoft.Storage/storageAccounts/blobServices/cont
   }
 }
 
-// ── Private DNS Zone ──────────────────────────────────────────────────────────
-
-resource blobDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' existing = {
-  // Zone name is mandated by Azure Private Link and cannot be changed.
-  #disable-next-line no-hardcoded-env-urls
-  name: 'privatelink.blob.core.windows.net'
-}
-
 // ── Private Endpoint ──────────────────────────────────────────────────────────
 
 resource secureStoragePrivateEndpoint 'Microsoft.Network/privateEndpoints@2023-05-01' = {
-  name: '${environmentName}-secure-storage-pe'
+  name: storageAccountPrivateEndpointName
   location: location
   tags: tags
   properties: {
@@ -113,14 +121,14 @@ resource secureStoragePrivateEndpoint 'Microsoft.Network/privateEndpoints@2023-0
 }
 
 resource secureStorageDnsZoneGroup 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2023-05-01' = {
-  name: 'secureStorageDnsZoneGroup'
+  name: 'default'
   parent: secureStoragePrivateEndpoint
   properties: {
     privateDnsZoneConfigs: [
       {
-        name: 'privatelink-blob-core-windows-net'
+        name: 'privatelink_blob_core_windows_net'
         properties: {
-          privateDnsZoneId: blobDnsZone.id
+          privateDnsZoneId: blobStoragePrivateDnsZoneId
         }
       }
     ]

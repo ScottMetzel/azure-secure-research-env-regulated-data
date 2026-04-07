@@ -1,23 +1,34 @@
 @description('Azure region for the Log Analytics workspace.')
-param location string
+param location string = 'westus2'
 
-@description('Environment name used as a prefix for resource names.')
-@minLength(1)
-@maxLength(20)
-param environmentName string
+@description('Short environment name used as a prefix for all resource names.')
+@allowed([
+  'Demo'
+  'Dev'
+  'Test'
+  'Staging'
+  'Prod'
+])
+param environmentName string = 'Prod'
 
-@description('Tags to apply to all resources.')
-param tags object
+@description('The name of the Log Analytics Workspace to create.')
+param workspaceName string = '${environmentName}-LAW-SOC-01'
 
 @description('Number of days to retain log data.')
 @minValue(30)
 @maxValue(730)
 param retentionInDays int = 90
 
+@description('Tags to apply to all resources.')
+param tags object = {
+  workloadName: 'SRERD'
+  environment: 'Dev'
+}
+
 // ── Resources ────────────────────────────────────────────────────────────────
 
 resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
-  name: '${environmentName}-law'
+  name: workspaceName
   location: location
   tags: tags
   properties: {
@@ -31,6 +42,27 @@ resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2022-10
     publicNetworkAccessForIngestion: 'Enabled'
     publicNetworkAccessForQuery: 'Enabled'
   }
+}
+
+// Create Microsoft Sentinel on the Log Analytics Workspace
+resource sentinel 'Microsoft.OperationsManagement/solutions@2015-11-01-preview' = {
+  name: 'SecurityInsights(${workspaceName})'
+  location: location
+  properties: {
+    workspaceResourceId: logAnalyticsWorkspace.id
+  }
+  plan: {
+    name: 'SecurityInsights(${workspaceName})'
+    product: 'OMSGallery/SecurityInsights'
+    promotionCode: ''
+    publisher: 'Microsoft'
+  }
+}
+
+// Onboard Sentinel after it has been created
+resource onboardingStates 'Microsoft.SecurityInsights/onboardingStates@2025-09-01' = {
+  scope: logAnalyticsWorkspace
+  name: 'default'
 }
 
 // ── Outputs ───────────────────────────────────────────────────────────────────

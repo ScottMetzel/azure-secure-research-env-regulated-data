@@ -1,19 +1,27 @@
 @description('Azure region for Azure Bastion.')
-param location string
+param location string = 'westus2'
 
-@description('Environment name used as a prefix for resource names.')
-@minLength(1)
-@maxLength(20)
-param environmentName string
-
-@description('Tags to apply to all resources.')
-param tags object
+@description('Short environment name used as a prefix for all resource names.')
+@allowed([
+  'Demo'
+  'Dev'
+  'Test'
+  'Staging'
+  'Prod'
+])
+param environmentName string = 'Prod'
 
 @description('Resource ID of AzureBastionSubnet (must be named exactly "AzureBastionSubnet").')
-param bastionSubnetId string
+param bastionSubnetId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/Dev-RG-Network-01/providers/Microsoft.Network/virtualNetworks/Dev-VNET-Bastion-01/subnets/AzureBastionSubnet'
 
 @description('Resource ID of the Log Analytics workspace for diagnostics.')
-param logAnalyticsWorkspaceId string
+param logAnalyticsWorkspaceId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/prod-rg-SOC-01/providers/microsoft.operationalinsights/workspaces/prod-law-soc-01'
+
+@description('Tags to apply to all resources.')
+param tags object = {
+  workloadName: 'SRERD'
+  environment: 'Dev'
+}
 
 // ── Public IP ─────────────────────────────────────────────────────────────────
 
@@ -97,4 +105,4 @@ output bastionId string = bastion.id
 output bastionName string = bastion.name
 
 @description('The public IP address of Azure Bastion.')
-output bastionPublicIpAddress string = bastionPublicIp.properties.ipAddress
+output bastionPublicIpAddress string = bastionPublicIp!.properties.ipAddress

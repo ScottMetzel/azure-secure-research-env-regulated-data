@@ -1,19 +1,21 @@
 @description('Azure region for AVD resources.')
-param location string
+param location string = 'westus2'
 
-@description('Environment name used as a prefix for resource names.')
-@minLength(1)
-@maxLength(20)
-param environmentName string
-
-@description('Tags to apply to all resources.')
-param tags object
+@description('Short environment name used as a prefix for all resource names.')
+@allowed([
+  'Demo'
+  'Dev'
+  'Test'
+  'Staging'
+  'Prod'
+])
+param environmentName string = 'Prod'
 
 @description('Resource ID of the subnet for session host NICs.')
-param subnetId string
+param subnetId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/Dev-RG-Network-01/providers/Microsoft.Network/virtualNetworks/Dev-VNET-AVD-01/subnets/Dev-Subnet-AVD-SessionHosts'
 
 @description('Resource ID of the Log Analytics workspace for diagnostics.')
-param logAnalyticsWorkspaceId string
+param logAnalyticsWorkspaceId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/prod-rg-SOC-01/providers/microsoft.operationalinsights/workspaces/prod-law-soc-01'
 
 @description('VM size for AVD session hosts.')
 param vmSize string = 'Standard_D4s_v5'
@@ -24,11 +26,11 @@ param vmSize string = 'Standard_D4s_v5'
 param vmCount int = 2
 
 @description('Local administrator username for session host VMs.')
-param adminUsername string
+param adminUsername string = 'azureuser'
 
 @description('Local administrator password for session host VMs.')
 @secure()
-param adminPassword string
+param adminPassword string = ''
 
 @description('Active Directory domain to join. Leave empty when using AAD join. Used to configure the domain join extension (not deployed when aadJoin is true).')
 #disable-next-line no-unused-params
@@ -40,6 +42,11 @@ param aadJoin bool = true
 @description('UTC timestamp used to set host pool registration token expiry. Must be a future time. Defaults to 8 hours from deployment time.')
 param registrationTokenExpiry string = dateTimeAdd(utcNow(), 'PT8H')
 
+@description('Tags to apply to all resources.')
+param tags object = {
+  workloadName: 'SRERD'
+  environment: 'Prod'
+}
 // ── AVD Host Pool ─────────────────────────────────────────────────────────────
 
 resource hostPool 'Microsoft.DesktopVirtualization/hostPools@2023-09-05' = {
@@ -115,114 +122,122 @@ var imageReference = aadJoin
       version: 'latest'
     }
 
-resource sessionHostNics 'Microsoft.Network/networkInterfaces@2023-05-01' = [for i in range(0, vmCount): {
-  name: '${environmentName}-avd-nic-${i}'
-  location: location
-  tags: tags
-  properties: {
-    ipConfigurations: [
-      {
-        name: 'ipconfig1'
-        properties: {
-          privateIPAllocationMethod: 'Dynamic'
-          subnet: { id: subnetId }
+resource sessionHostNics 'Microsoft.Network/networkInterfaces@2023-05-01' = [
+  for i in range(0, vmCount): {
+    name: '${environmentName}-avd-nic-${i}'
+    location: location
+    tags: tags
+    properties: {
+      ipConfigurations: [
+        {
+          name: 'ipconfig1'
+          properties: {
+            privateIPAllocationMethod: 'Dynamic'
+            subnet: { id: subnetId }
+          }
         }
-      }
-    ]
-    enableAcceleratedNetworking: true
-  }
-}]
-
-resource sessionHostVMs 'Microsoft.Compute/virtualMachines@2023-07-01' = [for i in range(0, vmCount): {
-  name: '${environmentName}-avd-vm-${i}'
-  location: location
-  tags: tags
-  identity: {
-    type: 'SystemAssigned'
-  }
-  properties: {
-    hardwareProfile: { vmSize: vmSize }
-    osProfile: {
-      computerName: 'avd-vm-${i}'
-      adminUsername: adminUsername
-      adminPassword: adminPassword
-      windowsConfiguration: {
-        enableAutomaticUpdates: true
-        patchSettings: {
-          patchMode: 'AutomaticByPlatform'
-          assessmentMode: 'AutomaticByPlatform'
-        }
-      }
-    }
-    storageProfile: {
-      imageReference: imageReference
-      osDisk: {
-        createOption: 'FromImage'
-        managedDisk: { storageAccountType: 'Premium_LRS' }
-        deleteOption: 'Delete'
-      }
-    }
-    networkProfile: {
-      networkInterfaces: [
-        { id: sessionHostNics[i].id, properties: { deleteOption: 'Delete' } }
       ]
+      enableAcceleratedNetworking: true
     }
-    diagnosticsProfile: {
-      bootDiagnostics: { enabled: true }
-    }
-    licenseType: aadJoin ? 'Windows_Client' : 'Windows_Server'
   }
-  dependsOn: [sessionHostNics[i]]
-}]
+]
+
+resource sessionHostVMs 'Microsoft.Compute/virtualMachines@2023-07-01' = [
+  for i in range(0, vmCount): {
+    name: '${environmentName}-avd-vm-${i}'
+    location: location
+    tags: tags
+    identity: {
+      type: 'SystemAssigned'
+    }
+    properties: {
+      hardwareProfile: { vmSize: vmSize }
+      osProfile: {
+        computerName: 'avd-vm-${i}'
+        adminUsername: adminUsername
+        adminPassword: adminPassword
+        windowsConfiguration: {
+          enableAutomaticUpdates: true
+          patchSettings: {
+            patchMode: 'AutomaticByPlatform'
+            assessmentMode: 'AutomaticByPlatform'
+          }
+        }
+      }
+      storageProfile: {
+        imageReference: imageReference
+        osDisk: {
+          createOption: 'FromImage'
+          managedDisk: { storageAccountType: 'Premium_LRS' }
+          deleteOption: 'Delete'
+        }
+      }
+      networkProfile: {
+        networkInterfaces: [
+          { id: sessionHostNics[i].id, properties: { deleteOption: 'Delete' } }
+        ]
+      }
+      diagnosticsProfile: {
+        bootDiagnostics: { enabled: true }
+      }
+      licenseType: aadJoin ? 'Windows_Client' : 'Windows_Server'
+    }
+    dependsOn: [sessionHostNics[i]]
+  }
+]
 
 // ── AAD Join Extension ────────────────────────────────────────────────────────
 
-resource aadJoinExtensions 'Microsoft.Compute/virtualMachines/extensions@2023-07-01' = [for i in range(0, vmCount): if (aadJoin) {
-  name: 'AADLoginForWindows'
-  parent: sessionHostVMs[i]
-  location: location
-  properties: {
-    publisher: 'Microsoft.Azure.ActiveDirectory'
-    type: 'AADLoginForWindows'
-    typeHandlerVersion: '2.0'
-    autoUpgradeMinorVersion: true
-    settings: {
-      mdmId: ''
+resource aadJoinExtensions 'Microsoft.Compute/virtualMachines/extensions@2023-07-01' = [
+  for i in range(0, vmCount): if (aadJoin) {
+    name: 'AADLoginForWindows'
+    parent: sessionHostVMs[i]
+    location: location
+    properties: {
+      publisher: 'Microsoft.Azure.ActiveDirectory'
+      type: 'AADLoginForWindows'
+      typeHandlerVersion: '2.0'
+      autoUpgradeMinorVersion: true
+      settings: {
+        mdmId: ''
+      }
     }
   }
-}]
+]
 
 // ── AVD Agent Registration Extension ─────────────────────────────────────────
 
-resource avdAgentExtensions 'Microsoft.Compute/virtualMachines/extensions@2023-07-01' = [for i in range(0, vmCount): {
-  name: 'Microsoft.PowerShell.DSC'
-  parent: sessionHostVMs[i]
-  location: location
-  properties: {
-    publisher: 'Microsoft.Powershell'
-    type: 'DSC'
-    typeHandlerVersion: '2.73'
-    autoUpgradeMinorVersion: true
-    settings: {
-      #disable-next-line no-hardcoded-env-urls
-      modulesUrl: 'https://wvdportalstorageblob.blob.core.windows.net/galleryartifacts/Configuration_09-08-2022.zip'
-      configurationFunction: 'Configuration.ps1\\AddSessionHost'
-      properties: {
-        hostPoolName: hostPool.name
-        registrationInfoTokenCredential: {
-          UserName: 'PLACEHOLDER'
-          Password: 'PrivateSettingsRef:registrationInfoToken'
+resource avdAgentExtensions 'Microsoft.Compute/virtualMachines/extensions@2023-07-01' = [
+  for i in range(0, vmCount): {
+    name: 'Microsoft.PowerShell.DSC'
+    parent: sessionHostVMs[i]
+    location: location
+    properties: {
+      publisher: 'Microsoft.Powershell'
+      type: 'DSC'
+      typeHandlerVersion: '2.73'
+      autoUpgradeMinorVersion: true
+      settings: {
+        #disable-next-line no-hardcoded-env-urls
+        modulesUrl: 'https://wvdportalstorageblob.blob.core.windows.net/galleryartifacts/Configuration_09-08-2022.zip'
+        configurationFunction: 'Configuration.ps1\\AddSessionHost'
+        properties: {
+          hostPoolName: hostPool.name
+          registrationInfoTokenCredential: {
+            UserName: 'PLACEHOLDER'
+            Password: 'PrivateSettingsRef:registrationInfoToken'
+          }
+        }
+      }
+      protectedSettings: {
+        Items: {
+          registrationInfoToken: hostPool.properties.registrationInfo.token
         }
       }
     }
-    protectedSettings: {
-      Items: {
-        registrationInfoToken: hostPool.properties.registrationInfo.token
-      }
-    }
+    dependsOn: aadJoin ? [aadJoinExtensions[i]] : []
   }
-  dependsOn: aadJoin ? [aadJoinExtensions[i]] : []
-}]
+]
 
 // ── Diagnostics ───────────────────────────────────────────────────────────────
 

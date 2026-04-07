@@ -1,34 +1,45 @@
 @description('Azure region for the research VM.')
-param location string
+param location string = 'westus2'
 
-@description('Environment name used as a prefix for resource names.')
-@minLength(1)
-@maxLength(20)
-param environmentName string
+@description('Short environment name used as a prefix for all resource names.')
+@allowed([
+  'Demo'
+  'Dev'
+  'Test'
+  'Staging'
+  'Prod'
+])
+param environmentName string = 'Prod'
 
-@description('Tags to apply to all resources.')
-param tags object
-
-@description('Resource ID of the subnet for the VM NIC (ResearchSubnet in the hub VNet).')
-param subnetId string
-
-@description('Resource ID of the Log Analytics workspace. Used to associate the Azure Monitor Agent extension.')
-param logAnalyticsWorkspaceId string
+@description('Resource ID of the subnet for the VM NIC (Remote Desktop Subnet in the Remote Desktop VNET).')
+param subnetId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/Dev-RG-Network-01/providers/Microsoft.Network/virtualNetworks/Dev-VNET-RemoteDesktop-01/subnets/Dev-Subnet-RemoteDesktop'
 
 @description('VM size. Must be a Generation 2-capable, General Purpose size.')
 param vmSize string = 'Standard_D4ds_v5'
 
 @description('Local administrator username.')
-param adminUsername string
+param adminUsername string = 'azureuser'
 
 @description('Local administrator password.')
 @secure()
-param adminPassword string
+param adminPassword string = ''
+
+@description('Tags to apply to all resources.')
+param tags object = {
+  workloadName: 'SRERD'
+  environment: 'Dev'
+}
+
+// ── Variables ───────────────────────────────────────────────────────────────
+var serverNameBase = 'RDVM'
+var serverNameVM = '${serverNameBase}01'
+var serverOSDiskName = '${environmentName}-MDK-${serverNameVM}-01'
+var serverNICName = '${environmentName}-NIC-${serverNameVM}-01'
 
 // ── NIC (no public IP) ────────────────────────────────────────────────────────
 
-resource researchVmNic 'Microsoft.Network/networkInterfaces@2023-05-01' = {
-  name: '${environmentName}-research-nic'
+resource remoteDesktopVMNIC 'Microsoft.Network/networkInterfaces@2025-05-01' = {
+  name: serverNICName
   location: location
   tags: tags
   properties: {
@@ -45,12 +56,12 @@ resource researchVmNic 'Microsoft.Network/networkInterfaces@2023-05-01' = {
   }
 }
 
-// ── Research VM ───────────────────────────────────────────────────────────────
+// ── Remote Desktop VM ───────────────────────────────────────────────────────────────
 // Generation 2 VM running Windows Server 2025 Azure Edition.
 // Access is via Azure Bastion only — no public IP is attached.
 
-resource researchVm 'Microsoft.Compute/virtualMachines@2023-07-01' = {
-  name: '${environmentName}-research-vm'
+resource remoteDesktopVM 'Microsoft.Compute/virtualMachines@2025-04-01' = {
+  name: serverNameVM
   location: location
   tags: tags
   identity: {
@@ -61,7 +72,7 @@ resource researchVm 'Microsoft.Compute/virtualMachines@2023-07-01' = {
       vmSize: vmSize
     }
     osProfile: {
-      computerName: 'research-vm'
+      computerName: serverNameVM
       adminUsername: adminUsername
       adminPassword: adminPassword
       windowsConfiguration: {
@@ -84,11 +95,17 @@ resource researchVm 'Microsoft.Compute/virtualMachines@2023-07-01' = {
         createOption: 'FromImage'
         managedDisk: { storageAccountType: 'Premium_LRS' }
         deleteOption: 'Delete'
+        name: serverOSDiskName
       }
     }
     networkProfile: {
       networkInterfaces: [
-        { id: researchVmNic.id, properties: { deleteOption: 'Delete' } }
+        {
+          id: remoteDesktopVMNIC.id
+          properties: {
+            deleteOption: 'Delete'
+          }
+        }
       ]
     }
     diagnosticsProfile: {
@@ -107,18 +124,15 @@ resource researchVm 'Microsoft.Compute/virtualMachines@2023-07-01' = {
 
 // ── AAD Login Extension ───────────────────────────────────────────────────────
 
-resource aadLoginExtension 'Microsoft.Compute/virtualMachines/extensions@2023-07-01' = {
+resource aadLoginExtension 'Microsoft.Compute/virtualMachines/extensions@2015-06-15' = {
   name: 'AADLoginForWindows'
-  parent: researchVm
+  parent: remoteDesktopVM
   location: location
   properties: {
     publisher: 'Microsoft.Azure.ActiveDirectory'
     type: 'AADLoginForWindows'
-    typeHandlerVersion: '2.0'
+    typeHandlerVersion: '1.0'
     autoUpgradeMinorVersion: true
-    settings: {
-      mdmId: ''
-    }
   }
 }
 
@@ -126,8 +140,9 @@ resource aadLoginExtension 'Microsoft.Compute/virtualMachines/extensions@2023-07
 
 resource amaExtension 'Microsoft.Compute/virtualMachines/extensions@2023-07-01' = {
   name: 'AzureMonitorWindowsAgent'
-  parent: researchVm
+  parent: remoteDesktopVM
   location: location
+  dependsOn: [aadLoginExtension]
   properties: {
     publisher: 'Microsoft.Azure.Monitor'
     type: 'AzureMonitorWindowsAgent'
@@ -135,16 +150,12 @@ resource amaExtension 'Microsoft.Compute/virtualMachines/extensions@2023-07-01' 
     autoUpgradeMinorVersion: true
     enableAutomaticUpgrade: true
   }
-  dependsOn: [aadLoginExtension]
 }
 
 // ── Outputs ───────────────────────────────────────────────────────────────────
 
-@description('The resource ID of the research VM.')
-output vmId string = researchVm.id
+@description('The resource ID of the Remote Desktop VM.')
+output vmId string = remoteDesktopVM.id
 
-@description('The name of the research VM.')
-output vmName string = researchVm.name
-
-@description('The Log Analytics workspace resource ID (echo for caller convenience).')
-output logAnalyticsWorkspaceId string = logAnalyticsWorkspaceId
+@description('The name of the Remote Desktop VM.')
+output vmName string = remoteDesktopVM.name

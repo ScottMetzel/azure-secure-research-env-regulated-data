@@ -4,27 +4,29 @@
 // a bidirectional peering.
 
 @description('Name of the local virtual network that will own this peering.')
-param localVnetName string
+param localVnetName string = 'hub-vnet'
+
+@description('Name of the remote virtual network to peer with.')
+param remoteVnetName string = 'remote-desktop-spoke-vnet'
 
 @description('Resource ID of the remote virtual network to peer with.')
-param remoteVnetId string
-
-@description('A short suffix appended to the peering name to identify the direction (e.g. "to-hub" or "to-spoke").')
-param peeringSuffix string
+param remoteVnetId string = '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/Dev-RG-Network-01/providers/Microsoft.Network/virtualNetworks/Dev-VNET-RemoteDesktop-01'
 
 @description('Allow forwarded traffic through the peering.')
 param allowForwardedTraffic bool = true
+// ── Variables ───────────────────────────────────────────────────────────────
+var peeringName = '${localVnetName}_to_${remoteVnetName}'
 
 // ── Local VNet (existing) ─────────────────────────────────────────────────────
 
-resource localVnet 'Microsoft.Network/virtualNetworks@2023-05-01' existing = {
+resource localVnet 'Microsoft.Network/virtualNetworks@2025-05-01' existing = {
   name: localVnetName
 }
 
 // ── Peering ───────────────────────────────────────────────────────────────────
 
-resource peering 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@2023-05-01' = {
-  name: '${localVnetName}-${peeringSuffix}'
+resource peering 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@2025-05-01' = {
+  name: peeringName
   parent: localVnet
   properties: {
     remoteVirtualNetwork: { id: remoteVnetId }

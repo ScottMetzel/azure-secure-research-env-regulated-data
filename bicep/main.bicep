@@ -3,413 +3,399 @@ targetScope = 'subscription'
 // ── Parameters ────────────────────────────────────────────────────────────────
 
 @description('Azure region for all resources.')
-param location string = 'eastus'
+param location string = 'westus2'
 
 @description('Short environment name used as a prefix for all resource names.')
-@minLength(1)
-@maxLength(20)
-param environmentName string = 'sre'
+@allowed([
+  'Demo'
+  'Dev'
+  'Test'
+  'Staging'
+  'Prod'
+])
+param environmentName string = 'Prod'
 
-@description('Tags applied to every resource.')
-param tags object = {
-  environment: 'secure-research'
-  managedBy: 'bicep'
-}
+@description('Tag - Workload Name.')
+param workloadName string = 'SRERD'
+
+@description('Tag - Solution Owner.')
+param solutionOwner string = 'owner@example.com'
 
 @description('Local administrator username for VMs.')
-param adminUsername string
+param adminUsername string = 'azureuser'
 
 @description('Local administrator password for VMs.')
 @secure()
-param adminPassword string
+param adminPassword string = ''
 
-@description('Email address to receive data-egress approval requests.')
-param approverEmail string
+@description('Options: Bastion or AVD. Determines whether to deploy Azure Bastion with a virtual machine or Azure Virtual Desktop for remote access to the environment. Default is Bastion.')
+@allowed([
+  'Bastion'
+  'AVD'
+])
+param BastionOrAVD string = 'Bastion'
 
-@description('Address prefix for the spoke virtual network.')
-param vnetAddressPrefix string = '10.0.0.0/16'
+@description('Number of days to retain Azure Firewall logs and metrics in the connected Log Analytics workspace.')
+param PolicyAnalyticsRetentionInDays int = 90
 
-@description('Address prefix for the hub virtual network (must not overlap with spoke).')
-param hubVnetAddressPrefix string = '10.1.0.0/16'
+@description('Subscription ID where the research environment will be deployed. Used for cross-subscription resource deployments and role assignments.')
+@minLength(36)
+@maxLength(36)
+param researcherSubscriptionID string = '00000000-0000-0000-0000-000000000000'
+
+@description('Subscription ID where the hub VNet (with Firewall) will be deployed. Used for cross-subscription resource deployments and role assignments.')
+@minLength(36)
+@maxLength(36)
+param hubSubscriptionID string = '00000000-0000-0000-0000-000000000000'
+
+@description('Subscription ID where the Bastion and virtual desktop environment will be deployed. Used for cross-subscription resource deployments and role assignments.')
+@minLength(36)
+@maxLength(36)
+param virtualDesktopSubscriptionID string = '00000000-0000-0000-0000-000000000000'
 
 @description('VM size for Data Science VMs.')
-param dsVmSize string = 'Standard_D8s_v5'
+param researcherVMSize string = 'Standard_D4ds_v5'
 
 @description('Number of Data Science VMs.')
 @minValue(1)
-@maxValue(20)
-param dsVmCount int = 1
+@maxValue(1)
+param researcherVMCount int = 1
 
-// ── Resource Groups ───────────────────────────────────────────────────────────
+@description('The email address of the data approver, who will receive notifications and approval requests when researchers attempt to upload data to the secure environment.')
+param dataApproverEmail string = 'dataapprover@example.com'
 
-@description('Monitoring resource group — contains the Log Analytics workspace.')
-resource monitoringRg 'Microsoft.Resources/resourceGroups@2023-07-01' = {
-  name: '${environmentName}-monitoring-rg'
-  location: location
-  tags: tags
+#disable-next-line no-hardcoded-env-urls
+param blobPrivateLinkZoneName string = 'privatelink.blob.core.windows.net'
+
+param privateDnsZoneNames array = [
+  'privatelink.vaultcore.azure.net'
+  'privatelink.datafactory.azure.net'
+  'privatelink.azureml.ms'
+]
+
+@description('The string array of FQDNs needed to allow Azure Machine Configuration to access Microsoft-managed Storage Accounts in Azure. These URLs are used in the Azure Firewall Policy and are region-specific. Default values are for West US 2. Refer to this article for more information:')
+param azureMachineConfigStorageFQDNs array = [
+  #disable-next-line no-hardcoded-env-urls
+  'oaasguestconfigeuss1.blob.core.windows.net'
+  #disable-next-line no-hardcoded-env-urls
+  'oaasguestconfigeus2s1.blob.core.windows.net'
+  #disable-next-line no-hardcoded-env-urls
+  'oaasguestconfigwuss1.blob.core.windows.net'
+  #disable-next-line no-hardcoded-env-urls
+  'oaasguestconfigwus2s1.blob.core.windows.net'
+  #disable-next-line no-hardcoded-env-urls
+  'oaasguestconfigncuss1.blob.core.windows.net'
+  #disable-next-line no-hardcoded-env-urls
+  'oaasguestconfigcuss1.blob.core.windows.net'
+  #disable-next-line no-hardcoded-env-urls
+  'oaasguestconfigscuss1.blob.core.windows.net'
+  #disable-next-line no-hardcoded-env-urls
+  'oaasguestconfigwus3s1.blob.core.windows.net'
+  #disable-next-line no-hardcoded-env-urls
+  'oaasguestconfigwcuss1.blob.core.windows.net'
+]
+
+// ── Hub VNET Parameters ───────────────────────────────────────────────────────────
+@description('Address prefix for the hub virtual network.')
+param net_hub_vnetAddressPrefix string = '10.100.0.0/23'
+
+@description('Address prefix for the GatewaySubnet (minimum /28).')
+param net_hub_gatewaySubnetPrefix string = '10.100.0.0/26'
+
+@description('Address prefix for AzureFirewallSubnet (minimum /26).')
+param net_hub_firewallSubnetPrefix string = '10.100.0.64/26'
+
+@description('Address prefix for Azure DNS Private Resolver Inbound Subnet (minimum /28).')
+param net_hub_azDNSPrivateResolverInboundSubnetPrefix string = '10.100.0.128/28'
+
+@description('Address prefix for Azure DNS Private Resolver Outbound Subnet (minimum /28).')
+param net_hub_azDNSPrivateResolverOutboundSubnetPrefix string = '10.100.0.144/28'
+
+// ── Remote Desktop VNET Parameters ───────────────────────────────────────────────────────────
+@description('Address prefix for the virtual network.')
+param net_RemoteDesktop_vnetAddressPrefix string = '10.100.40.0/21'
+
+@description('Address prefix for the Azure Bastion subnet.')
+param net_RemoteDesktop_bastionSubnetPrefix string = '10.100.40.0/26'
+
+param net_RemoteDesktop_webSubnetPrefix string = '10.100.40.64/27'
+param net_RemoteDesktop_appSubnetPrefix string = '10.100.40.96/27'
+param net_RemoteDesktop_dbSubnetPrefix string = '10.100.40.128/27'
+@description('Address prefix for the storage subnet, used with Azure Storage Accounts and FSLogix.')
+param net_RemoteDesktop_storageSubnetPrefix string = '10.100.40.160/27'
+
+param net_RemoteDesktop_webVNETIntegrationSubnetPrefix string = '10.100.40.192/27'
+
+@description('Address prefix for the Remote Desktop Server subnet.')
+param net_RemoteDesktop_rdServerSubnetPrefix string = '10.100.41.0/24'
+
+@description('Address prefix for the first Azure Virtual Desktop subnet.')
+param net_RemoteDesktop_avdSubnetPrefix string = '10.100.42.0/24'
+
+// ── Researcher VNET Parameters ───────────────────────────────────────────────────────────
+@description('Address prefix for the Researcher Spoke Azure Virtual Network.')
+param net_researcher_vnetAddressPrefix string = '10.100.56.0/21'
+
+param net_researcher_webSubnetPrefix string = '10.100.56.64/27'
+param net_researcher_appSubnetPrefix string = '10.100.56.96/27'
+param net_researcher_dbSubnetPrefix string = '10.100.56.128/27'
+
+@description('Address prefix for the storage subnet, used with Azure Storage Accounts and FSLogix.')
+param net_researcher_storageSubnetPrefix string = '10.100.56.160/27'
+
+param net_researcher_webVNETIntegrationSubnetPrefix string = '10.100.56.192/27'
+
+@description('Address prefix for the first Data Science Server subnet.')
+param net_researcher_ServerSubnetPrefix string = '10.100.61.0/28'
+
+@description('The date and time in UTC format. Used as part of the deployment name')
+param deploymentTimestamp string = utcNow()
+
+// ── Variables ───────────────────────────────────────────────────────────
+var privateDnsZoneNamesArray = concat([blobPrivateLinkZoneName], privateDnsZoneNames)
+
+var blobStoragePrivateDnsZoneId = resourceId(
+  hubSubscriptionID,
+  hubSub_framing.outputs.privateDNSZonesRGName,
+  'Microsoft.Network/privateDnsZones',
+  blobPrivateLinkZoneName
+)
+
+var keyVaultPrivateDnsZoneId = resourceId(
+  hubSubscriptionID,
+  hubSub_framing.outputs.privateDNSZonesRGName,
+  'Microsoft.Network/privateDnsZones',
+  'privatelink.vaultcore.azure.net'
+)
+
+var dataFactoryPrivateDnsZoneId = resourceId(
+  hubSubscriptionID,
+  hubSub_framing.outputs.privateDNSZonesRGName,
+  'Microsoft.Network/privateDnsZones',
+  'privatelink.datafactory.azure.net'
+)
+
+var azureMLPrivateDnsZoneId = resourceId(
+  hubSubscriptionID,
+  hubSub_framing.outputs.privateDNSZonesRGName,
+  'Microsoft.Network/privateDnsZones',
+  'privatelink.azureml.ms'
+)
+
+@description('Azure DNS Private Resolver Inbound Endpoint Static Private IP Address. Must be within the address range of the AzDNSPRInbound01 subnet defined in the hub virtual network.')
+var azDNSPRInboundStaticIPCIDR = cidrSubnet(net_hub_azDNSPrivateResolverInboundSubnetPrefix, 32, 4)
+
+var net_hub_azDNSPRInboundStaticIP = first(split(azDNSPRInboundStaticIPCIDR, '/'))
+
+@description('Azure Firewall Private IP Address. This is the 5th usable IP in the AzureFirewallSubnet.')
+var firewallPrivateIPCIDR = cidrSubnet(net_hub_firewallSubnetPrefix, 32, 4)
+
+var net_hub_azureFirewallPrivateIP = first(split(firewallPrivateIPCIDR, '/'))
+
+var vNETDNSServers = [
+  net_hub_azureFirewallPrivateIP
+]
+
+@description('Tags applied to every resource.')
+var tags = {
+  Description: 'Secure Research Environment for Regulated Data'
+  Environment: environmentName
+  Owner: solutionOwner
+  WorkloadName: workloadName
 }
 
-@description('Hub VNet resource group — contains the hub virtual network (Firewall, Bastion, Research subnets). Satisfies requirement: VNet in its own resource group.')
-resource hubVnetRg 'Microsoft.Resources/resourceGroups@2023-07-01' = {
-  name: '${environmentName}-hubvnet-rg'
-  location: location
-  tags: tags
-}
-
-@description('Firewall resource group — contains Azure Firewall and its policy. Satisfies requirement: Firewall components in a separate resource group from the VNet.')
-resource firewallRg 'Microsoft.Resources/resourceGroups@2023-07-01' = {
-  name: '${environmentName}-firewall-rg'
-  location: location
-  tags: tags
-}
-
-@description('Bastion resource group — contains Azure Bastion and its public IP. Satisfies requirement: Bastion in a separate resource group from the VNet and the VM.')
-resource bastionRg 'Microsoft.Resources/resourceGroups@2023-07-01' = {
-  name: '${environmentName}-bastion-rg'
-  location: location
-  tags: tags
-}
-
-@description('Research VM resource group — contains the Gen2 Windows Server 2025 Azure Edition jumpbox VM. Satisfies requirement: VM in its own resource group.')
-resource researchVmRg 'Microsoft.Resources/resourceGroups@2023-07-01' = {
-  name: '${environmentName}-researchvm-rg'
-  location: location
-  tags: tags
-}
-
-@description('Spoke network resource group — contains the spoke VNet and private DNS zones.')
-resource networkRg 'Microsoft.Resources/resourceGroups@2023-07-01' = {
-  name: '${environmentName}-network-rg'
-  location: location
-  tags: tags
-}
-
-@description('Compute resource group — contains Key Vault, secure storage, Data Factory, and Data Science VMs.')
-resource computeRg 'Microsoft.Resources/resourceGroups@2023-07-01' = {
-  name: '${environmentName}-compute-rg'
-  location: location
-  tags: tags
-}
-
-@description('Ingestion resource group — contains the publicly-accessible data ingestion storage account. Satisfies requirement: public storage in its own resource group.')
-resource ingestRg 'Microsoft.Resources/resourceGroups@2023-07-01' = {
-  name: '${environmentName}-ingest-rg'
-  location: location
-  tags: tags
-}
-
-@description('Logic App resource group — contains the data-egress approval Logic App. Satisfies requirement: Logic App in its own resource group.')
-resource logicAppRg 'Microsoft.Resources/resourceGroups@2023-07-01' = {
-  name: '${environmentName}-logicapp-rg'
-  location: location
-  tags: tags
-}
-
-// ── Monitoring (monitoring-rg) ────────────────────────────────────────────────
-
-module monitoring 'modules/monitoring/logAnalytics.bicep' = {
-  name: 'monitoring'
-  scope: monitoringRg
+/// ── Subscription Deployments - Foundation (VNETs, RTs, NSGs) ───────────────────────
+@description('Hub Subscription - Foundational components.')
+module hubSub_foundation 'modules/subscriptions/hubSub_foundation.bicep' = {
+  name: 'hubSub_foundation_${deploymentTimestamp}'
+  scope: subscription(hubSubscriptionID)
   params: {
     location: location
     environmentName: environmentName
+    net_hub_vnetAddressPrefix: net_hub_vnetAddressPrefix
+    net_hub_gatewaySubnetPrefix: net_hub_gatewaySubnetPrefix
+    net_hub_firewallSubnetPrefix: net_hub_firewallSubnetPrefix
+    net_hub_azDNSPrivateResolverInboundSubnetPrefix: net_hub_azDNSPrivateResolverInboundSubnetPrefix
+    net_hub_azDNSPrivateResolverOutboundSubnetPrefix: net_hub_azDNSPrivateResolverOutboundSubnetPrefix
+    vNETDNSServers: vNETDNSServers
+    deploymentTimestamp: deploymentTimestamp
     tags: tags
   }
 }
 
-// ── Spoke VNet (network-rg) ───────────────────────────────────────────────────
-// Contains ComputeSubnet, PrivateEndpointSubnet, DataIntegrationSubnet
-// and all private DNS zones for private endpoints.
-
-module network 'modules/network/vnet.bicep' = {
-  name: 'network'
-  scope: networkRg
+@description('Virtual Desktop Subscription - Foundational components.')
+module virtualDesktopSub_foundation 'modules/subscriptions/virtualDesktopSub_foundation.bicep' = {
+  name: 'virtualDesktopSub_foundation_${deploymentTimestamp}'
+  scope: subscription(virtualDesktopSubscriptionID)
   params: {
     location: location
     environmentName: environmentName
+    net_RemoteDesktop_vnetAddressPrefix: net_RemoteDesktop_vnetAddressPrefix
+    net_RemoteDesktop_bastionSubnetPrefix: net_RemoteDesktop_bastionSubnetPrefix
+    net_RemoteDesktop_webSubnetPrefix: net_RemoteDesktop_webSubnetPrefix
+    net_RemoteDesktop_appSubnetPrefix: net_RemoteDesktop_appSubnetPrefix
+    net_RemoteDesktop_dbSubnetPrefix: net_RemoteDesktop_dbSubnetPrefix
+    net_RemoteDesktop_storageSubnetPrefix: net_RemoteDesktop_storageSubnetPrefix
+    net_RemoteDesktop_webVNETIntegrationSubnetPrefix: net_RemoteDesktop_webVNETIntegrationSubnetPrefix
+    net_RemoteDesktop_rdServerSubnetPrefix: net_RemoteDesktop_rdServerSubnetPrefix
+    net_RemoteDesktop_avdSubnetPrefix: net_RemoteDesktop_avdSubnetPrefix
+    net_hub_azureFirewallPrivateIP: net_hub_azureFirewallPrivateIP
+    vNETDNSServers: vNETDNSServers
+    deploymentTimestamp: deploymentTimestamp
     tags: tags
-    vnetAddressPrefix: vnetAddressPrefix
   }
 }
 
-// ── Hub VNet (hubvnet-rg) ─────────────────────────────────────────────────────
-// Contains AzureFirewallSubnet, AzureBastionSubnet, ResearchSubnet.
-// Requirement: VNet hosting Firewall is in its own resource group (hubvnet-rg);
-// Firewall, Bastion, and research VM are each deployed in separate resource groups.
-
-module hubVnet 'modules/network/hubvnet.bicep' = {
-  name: 'hubVnet'
-  scope: hubVnetRg
+@description('Researcher Subscription - Foundational components.')
+module researcherSub_foundation 'modules/subscriptions/researcherSub_foundation.bicep' = {
+  name: 'researcherSub_foundation_${deploymentTimestamp}'
+  scope: subscription(researcherSubscriptionID)
   params: {
     location: location
     environmentName: environmentName
+    net_researcher_vnetAddressPrefix: net_researcher_vnetAddressPrefix
+    net_researcher_webSubnetPrefix: net_researcher_webSubnetPrefix
+    net_researcher_appSubnetPrefix: net_researcher_appSubnetPrefix
+    net_researcher_dbSubnetPrefix: net_researcher_dbSubnetPrefix
+    net_researcher_storageSubnetPrefix: net_researcher_storageSubnetPrefix
+    net_researcher_webVNETIntegrationSubnetPrefix: net_researcher_webVNETIntegrationSubnetPrefix
+    net_researcher_ServerSubnetPrefix: net_researcher_ServerSubnetPrefix
+    vNETDNSServers: vNETDNSServers
+    net_hub_azureFirewallPrivateIP: net_hub_azureFirewallPrivateIP
+    deploymentTimestamp: deploymentTimestamp
     tags: tags
-    hubVnetAddressPrefix: hubVnetAddressPrefix
   }
 }
 
-// ── VNet Peerings ─────────────────────────────────────────────────────────────
-// Peerings are deployed as separate modules to avoid a circular dependency
-// between the hub and spoke VNet modules.
+/// ── Subscription Deployments - Framing (VNET Peerings) ───────────────────────
 
-module hubToSpokePeering 'modules/network/vnetPeering.bicep' = {
-  name: 'hubToSpokePeering'
-  scope: hubVnetRg
-  params: {
-    localVnetName: hubVnet.outputs.hubVnetName
-    remoteVnetId: network.outputs.vnetId
-    peeringSuffix: 'to-spoke'
-  }
-}
-
-module spokeToHubPeering 'modules/network/vnetPeering.bicep' = {
-  name: 'spokeToHubPeering'
-  scope: networkRg
-  params: {
-    localVnetName: network.outputs.vnetName
-    remoteVnetId: hubVnet.outputs.hubVnetId
-    peeringSuffix: 'to-hub'
-  }
-}
-
-// ── Hub VNet DNS Zone Links (network-rg, where DNS zones live) ────────────────
-// Creates additional VNet links so the research VM in the hub can resolve
-// private endpoint DNS names (storage, Key Vault, ADF, etc.).
-
-module hubDnsZoneLinks 'modules/network/dnsZoneLinks.bicep' = {
-  name: 'hubDnsZoneLinks'
-  scope: networkRg
-  params: {
-    environmentName: environmentName
-    tags: tags
-    vnetId: hubVnet.outputs.hubVnetId
-    dnsZoneNames: network.outputs.privateDnsZoneNames
-  }
-}
-
-// ── Azure Firewall (firewall-rg; uses AzureFirewallSubnet from hub VNet) ──────
-// Requirement: Firewall components in a separate resource group from the hub VNet.
-
-module firewall 'modules/network/firewall.bicep' = {
-  name: 'firewall'
-  scope: firewallRg
+module hubSub_framing 'modules/subscriptions/hubSub_framing.bicep' = {
+  name: 'hubSub_framing_${deploymentTimestamp}'
+  scope: subscription(hubSubscriptionID)
   params: {
     location: location
     environmentName: environmentName
+    net_hub_vnetId: hubSub_foundation.outputs.hubVNETId
+    net_hub_firewallSubnetId: hubSub_foundation.outputs.hubVNETFirewallSubnetId
+    PolicyAnalyticsRetentionInDays: PolicyAnalyticsRetentionInDays
+    logAnalyticsWorkspaceId: hubSub_foundation.outputs.logAnalyticsWorkspaceResourceId
+    remoteDesktopVnetId: virtualDesktopSub_foundation.outputs.rdVnetId
+    researcherVnetId: researcherSub_foundation.outputs.researcherVnetId
+    net_hub_azDNSPRInboundStaticIP: net_hub_azDNSPRInboundStaticIP
+    privateDnsZoneNamesArray: privateDnsZoneNamesArray
+    net_hub_azureFirewallPrivateIP: net_hub_azureFirewallPrivateIP
+    deploymentTimestamp: deploymentTimestamp
+    azureMachineConfigStorageFQDNs: azureMachineConfigStorageFQDNs
     tags: tags
-    firewallSubnetId: hubVnet.outputs.firewallSubnetId
-    logAnalyticsWorkspaceId: monitoring.outputs.workspaceResourceId
   }
 }
 
-// ── Azure Bastion (bastion-rg; uses AzureBastionSubnet from hub VNet) ─────────
-// Requirement: Bastion in a separate resource group from the hub VNet and VM.
-
-module bastion 'modules/bastion/bastion.bicep' = {
-  name: 'bastion'
-  scope: bastionRg
+module virtualDesktopSub_framing 'modules/subscriptions/virtualDesktopSub_framing.bicep' = {
+  name: 'virtualDesktopSub_framing_${deploymentTimestamp}'
+  scope: subscription(virtualDesktopSubscriptionID)
   params: {
-    location: location
-    environmentName: environmentName
-    tags: tags
-    bastionSubnetId: hubVnet.outputs.bastionSubnetId
-    logAnalyticsWorkspaceId: monitoring.outputs.workspaceResourceId
+    remoteDesktopVnetRgName: virtualDesktopSub_foundation.outputs.rdVnetResourceGroupName
+    remoteDesktopVnetName: virtualDesktopSub_foundation.outputs.rdVnetName
+    hubVnetName: hubSub_foundation.outputs.hubVNETName
+    hubVnetId: hubSub_foundation.outputs.hubVNETId
+    deploymentTimestamp: deploymentTimestamp
   }
 }
 
-// ── Research VM (researchvm-rg; NIC in ResearchSubnet of hub VNet) ────────────
-// Gen2 D4ds_v5 Windows Server 2025 Azure Edition VM — accessed via Azure Bastion.
-// Requirement: VM in a separate resource group from both the hub VNet and Bastion.
+module researcherSub_framing 'modules/subscriptions/researcherSub_framing.bicep' = {
+  name: 'researcherSub_framing_${deploymentTimestamp}'
+  scope: subscription(researcherSubscriptionID)
+  params: {
+    researcherVnetRgName: researcherSub_foundation.outputs.researcherVnetResourceGroupName
+    researcherVnetName: researcherSub_foundation.outputs.researcherVnetName
+    hubVnetName: hubSub_foundation.outputs.hubVNETName
+    hubVnetId: hubSub_foundation.outputs.hubVNETId
+    deploymentTimestamp: deploymentTimestamp
+  }
+}
 
-module researchVm 'modules/compute/researchvm.bicep' = {
-  name: 'researchVm'
-  scope: researchVmRg
+/// ── Subscription Deployments - Workloads (DNS, Storage, AVD, etc.) ───────────────────────
+@description('Hub Subscription - Workload components, including Azure Firewall and Private DNS Resolver.')
+module hubSub_workload 'modules/subscriptions/hubSub_workload.bicep' = {
+  name: 'hubSub_workload_${deploymentTimestamp}'
+  scope: subscription(hubSubscriptionID)
   params: {
     location: location
     environmentName: environmentName
+    net_hub_vnetId: hubSub_foundation.outputs.hubVNETId
+    net_hub_azDNSPRInboundSubnetId: hubSub_foundation.outputs.hubVNETDNSPRInboundSubnetId
+    net_hub_azDNSPRInboundStaticIP: net_hub_azDNSPRInboundStaticIP
+    deploymentTimestamp: deploymentTimestamp
     tags: tags
-    subnetId: hubVnet.outputs.researchSubnetId
-    logAnalyticsWorkspaceId: monitoring.outputs.workspaceResourceId
+  }
+}
+
+@description('Virtual Desktop Subscription - Workload components, including Bastion, Azure Virtual Desktop, and related resources.')
+module virtualDesktopSub_workload 'modules/subscriptions/virtualDesktopSub_workload.bicep' = {
+  name: 'virtualDesktopSub_workload_${deploymentTimestamp}'
+  scope: subscription(virtualDesktopSubscriptionID)
+  dependsOn: [hubSub_workload, hubSub_framing]
+  params: {
+    location: location
+    environmentName: environmentName
+    BastionOrAVD: BastionOrAVD
     adminUsername: adminUsername
     adminPassword: adminPassword
+    logAnalyticsWorkspaceId: hubSub_foundation.outputs.logAnalyticsWorkspaceResourceId
+    net_RemoteDesktop_bastionSubnetId: virtualDesktopSub_foundation.outputs.bastionSubnetId
+    net_RemoteDesktop_rdServerSubnetId: virtualDesktopSub_foundation.outputs.rdServerSubnetId
+    net_RemoteDesktop_avdSubnetId: virtualDesktopSub_foundation.outputs.avdSubnetId
+    deploymentTimestamp: deploymentTimestamp
+    tags: tags
   }
 }
 
-// ── Key Vault (compute-rg, private endpoint in PrivateEndpointSubnet) ─────────
-
-module keyvault 'modules/keyvault/keyvault.bicep' = {
-  name: 'keyvault'
-  scope: computeRg
+@description('Researcher Subscription - Workload components.')
+module researcherSub_workload 'modules/subscriptions/researcherSub_workload.bicep' = {
+  name: 'researcherSub_workload_${deploymentTimestamp}'
+  scope: subscription(researcherSubscriptionID)
+  #disable-next-line no-unnecessary-dependson
+  dependsOn: [hubSub_workload, hubSub_framing]
   params: {
     location: location
     environmentName: environmentName
-    tags: tags
-    subnetId: network.outputs.privateEndpointSubnetId
-    vnetId: network.outputs.vnetId
-    logAnalyticsWorkspaceId: monitoring.outputs.workspaceResourceId
-  }
-}
-
-// ── Ingestion Storage (ingest-rg) ─────────────────────────────────────────────
-// Publicly-accessible storage for external data uploads.
-// Requirement: Public storage account in its own resource group.
-
-module storageIngestion 'modules/storage/storageIngestion.bicep' = {
-  name: 'storageIngestion'
-  scope: ingestRg
-  params: {
-    location: location
-    environmentName: environmentName
-    tags: tags
-    logAnalyticsWorkspaceId: monitoring.outputs.workspaceResourceId
-  }
-}
-
-// ── Secure Storage (compute-rg, private endpoint in PrivateEndpointSubnet) ────
-
-module storageSecure 'modules/storage/storageSecure.bicep' = {
-  name: 'storageSecure'
-  scope: computeRg
-  params: {
-    location: location
-    environmentName: environmentName
-    tags: tags
-    subnetId: network.outputs.privateEndpointSubnetId
-    vnetId: network.outputs.vnetId
-    logAnalyticsWorkspaceId: monitoring.outputs.workspaceResourceId
-    keyVaultId: keyvault.outputs.keyVaultId
-  }
-}
-
-// ── Data Factory (compute-rg, private endpoint in DataIntegrationSubnet) ──────
-
-module datafactory 'modules/datafactory/datafactory.bicep' = {
-  name: 'datafactory'
-  scope: computeRg
-  params: {
-    location: location
-    environmentName: environmentName
-    tags: tags
-    subnetId: network.outputs.dataIntegrationSubnetId
-    vnetId: network.outputs.vnetId
-    logAnalyticsWorkspaceId: monitoring.outputs.workspaceResourceId
-    secureStorageAccountId: storageSecure.outputs.storageAccountId
-    secureStorageAccountName: storageSecure.outputs.storageAccountName
-    keyVaultId: keyvault.outputs.keyVaultId
-  }
-}
-
-// ── ADF → Ingestion Storage Role Assignment (ingest-rg) ──────────────────────
-// The ingestion storage account lives in ingest-rg while ADF lives in compute-rg.
-// The role assignment must be deployed in ingest-rg to avoid a cross-RG scope error.
-
-module adfIngestionRoleAssignment 'modules/roleAssignment/roleAssignment.bicep' = {
-  name: 'adfIngestionRoleAssignment'
-  scope: ingestRg
-  params: {
-    principalId: datafactory.outputs.dataFactoryPrincipalId
-    roleDefinitionId: 'ba92f5b4-2d11-453d-a403-e96b0029c9fe' // Storage Blob Data Contributor
-    seed: '${storageIngestion.outputs.storageAccountId}-adf-sbc'
-  }
-}
-
-// ── Data Science VMs (compute-rg, NICs in ComputeSubnet) ─────────────────────
-
-module datasciencevm 'modules/compute/datasciencevm.bicep' = {
-  name: 'datasciencevm'
-  scope: computeRg
-  params: {
-    location: location
-    environmentName: environmentName
-    tags: tags
-    subnetId: network.outputs.computeSubnetId
-    logAnalyticsWorkspaceId: monitoring.outputs.workspaceResourceId
-    vmSize: dsVmSize
-    vmCount: dsVmCount
+    net_researcher_vnetId: researcherSub_foundation.outputs.researcherVnetId
+    net_researcher_App01SubnetId: researcherSub_foundation.outputs.App01SubnetId
+    net_researcher_Storage01SubnetId: researcherSub_foundation.outputs.Storage01SubnetId
+    net_researcher_KeyVault01SubnetId: researcherSub_foundation.outputs.KeyVault01SubnetId
+    net_researcher_ResearcherVMSubnet01SubnetId: researcherSub_foundation.outputs.ResearcherVMSubnet01SubnetId
     adminUsername: adminUsername
     adminPassword: adminPassword
-  }
-}
-
-// ── Egress Approval Logic App (logicapp-rg) ───────────────────────────────────
-// Requirement: Logic App in its own resource group.
-
-module egressApproval 'modules/logicapp/egressApproval.bicep' = {
-  name: 'egressApproval'
-  scope: logicAppRg
-  params: {
-    location: location
-    environmentName: environmentName
+    researcherVMSize: researcherVMSize
+    researcherVMCount: researcherVMCount
+    dataApproverEmail: dataApproverEmail
+    logAnalyticsWorkspaceId: hubSub_foundation.outputs.logAnalyticsWorkspaceResourceId
+    blobStoragePrivateDnsZoneId: blobStoragePrivateDnsZoneId
+    keyVaultPrivateDnsZoneId: keyVaultPrivateDnsZoneId
+    dataFactoryPrivateDnsZoneId: dataFactoryPrivateDnsZoneId
+    azureMLPrivateDnsZoneId: azureMLPrivateDnsZoneId
+    deploymentTimestamp: deploymentTimestamp
     tags: tags
-    logAnalyticsWorkspaceId: monitoring.outputs.workspaceResourceId
-    approverEmail: approverEmail
-    secureStorageAccountId: storageSecure.outputs.storageAccountId
-    secureStorageAccountName: storageSecure.outputs.storageAccountName
-    keyVaultId: keyvault.outputs.keyVaultId
   }
 }
-
 // ── Outputs ───────────────────────────────────────────────────────────────────
 
-@description('Name of the monitoring resource group.')
-output monitoringResourceGroupName string = monitoringRg.name
+@description('Resource ID of the Firewall.')
+output firewallResourceID string = hubSub_framing.outputs.firewallId
 
-@description('Name of the hub VNet resource group (contains the hub VNet with Firewall, Bastion, and Research subnets).')
-output hubVnetResourceGroupName string = hubVnetRg.name
-
-@description('Name of the Firewall resource group.')
-output firewallResourceGroupName string = firewallRg.name
-
-@description('Name of the Bastion resource group.')
-output bastionResourceGroupName string = bastionRg.name
-
-@description('Name of the research VM resource group.')
-output researchVmResourceGroupName string = researchVmRg.name
-
-@description('Name of the spoke network resource group.')
-output networkResourceGroupName string = networkRg.name
-
-@description('Name of the compute resource group.')
-output computeResourceGroupName string = computeRg.name
-
-@description('Name of the ingestion resource group.')
-output ingestResourceGroupName string = ingestRg.name
-
-@description('Name of the Logic App resource group.')
-output logicAppResourceGroupName string = logicAppRg.name
+@description('Resource ID of the Bastion.')
+output bastionResourceID string = ((BastionOrAVD == 'Bastion')
+  ? virtualDesktopSub_workload.outputs.bastionResourceId
+  : 'Bastion deployment not selected, no Bastion resource created.')
 
 @description('Resource ID of the hub virtual network.')
-output hubVnetId string = hubVnet.outputs.hubVnetId
+output hubVnetId string = hubSub_foundation.outputs.hubVNETId
 
 @description('Resource ID of the spoke virtual network.')
-output spokeVnetId string = network.outputs.vnetId
+output remoteDesktopVnetId string = virtualDesktopSub_foundation.outputs.rdVnetId
+
+@description('Resource ID of the research virtual network.')
+output researchVnetId string = researcherSub_foundation.outputs.researcherVnetId
 
 @description('Resource ID of the Log Analytics workspace.')
-output logAnalyticsWorkspaceId string = monitoring.outputs.workspaceResourceId
-
-@description('Resource ID of the Key Vault.')
-output keyVaultId string = keyvault.outputs.keyVaultId
-
-@description('URI of the Key Vault.')
-output keyVaultUri string = keyvault.outputs.keyVaultUri
-
-@description('Name of the ingestion storage account.')
-output ingestionStorageAccountName string = storageIngestion.outputs.storageAccountName
-
-@description('Name of the secure storage account.')
-output secureStorageAccountName string = storageSecure.outputs.storageAccountName
-
-@description('Name of the Azure Data Factory.')
-output dataFactoryName string = datafactory.outputs.dataFactoryName
-
-@description('Name of the research VM.')
-output researchVmName string = researchVm.outputs.vmName
-
-@description('Name of the Azure Bastion host.')
-output bastionName string = bastion.outputs.bastionName
-
-@description('Name of the Azure Firewall.')
-output firewallName string = firewall.outputs.firewallName
-
-@description('HTTP callback URL for the egress approval Logic App.')
-output egressApprovalCallbackUrl string = egressApproval.outputs.logicAppCallbackUrl
+output logAnalyticsWorkspaceId string = hubSub_foundation.outputs.logAnalyticsWorkspaceResourceId
