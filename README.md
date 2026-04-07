@@ -9,20 +9,6 @@ The architecture is an implementation of the reference design published at:
 
 ## Architecture Overview
 
-### Resource Group Layout
-
-| Resource Group | Purpose |
-|---|---|
-| `{env}-monitoring-rg` | Log Analytics workspace (centralised diagnostics for all components) |
-| `{env}-hubvnet-rg` | **Hub VNet** — contains `AzureFirewallSubnet`, `AzureBastionSubnet`, `ResearchSubnet` |
-| `{env}-firewall-rg` | Azure Firewall (Standard SKU) + Firewall Policy |
-| `{env}-bastion-rg` | Azure Bastion (Standard SKU) |
-| `{env}-researchvm-rg` | Gen2 D4ds\_v5 Windows Server 2025 Azure Edition research jumpbox VM |
-| `{env}-network-rg` | Spoke VNet + Private DNS zones (blob, vault, datafactory, azureml) |
-| `{env}-compute-rg` | Key Vault · Secure Storage · Azure Data Factory · Data Science VMs |
-| `{env}-ingest-rg` | Publicly-accessible data ingestion storage account |
-| `{env}-logicapp-rg` | Data-egress approval Logic App |
-
 ### Design Decisions
 
 * **VNet separation**: The hub VNet (Firewall, Bastion, researcher access) lives in its own resource group (`hubvnet-rg`). Azure Firewall, Azure Bastion, and the research VM each have their own resource groups. This follows the principle of least-blast-radius: deleting or locking a component RG doesn't affect the network infrastructure.
