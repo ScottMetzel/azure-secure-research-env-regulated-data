@@ -50,8 +50,8 @@ bicep/
     │   ├── privateDNSResolver.bicep            Private DNS Resolver (with endpoints associated to VNET Hub)
     │   ├── privateDNSZonesAndLinks.bicep       Private DNS Zones and Virtual Network Links (with Internet Fallback enabled)
     │   ├── vnetPeering.bicep                   Single-direction VNET peering (deployed once-per spoke-to-hub and n times per hub-to-spoke peering)
-    └── roleAssignment/
-    │   └── roleAssignment.bicep                RG-scoped RBAC role assignment helper
+    ├── roleAssignment/
+    │   ├── roleAssignment.bicep                RG-scoped RBAC role assignment helper
     ├── storage/
     │   ├── storageIngestion.bicep              Publicly-accessible ingestion storage
     │   └── storageSecure.bicep                 Private immutable research-data storage
@@ -65,7 +65,7 @@ bicep/
         └── virtualDesktopSub_foundation.bicep  Resource Group for Networking and Networking (Spoke VNET) in the Remote Desktop Sub
         └── virtualDesktopSub_framing.bicep     Spoke-to-Hub VNET Peering in the Remote Desktop Sub
         └── virtualDesktopSub_workload.bicep    Resource Groups and AVD or Bastion + Remote Desktop VM in the Remote Desktop Sub
-
+```
 ## Deployment
 
 ### Prerequisites
@@ -95,6 +95,7 @@ Optional overrides (with safe defaults):
 | `dsVmCount` | `1` | Number of Data Science VMs |
 
 ### Deploy
+You can use the example "Deploy-SRE.ps1" PowerShell script in this folder to deploy (requires Bicep be installed), or the Azure CLI example, below:
 
 ```bash
 az deployment sub create \
